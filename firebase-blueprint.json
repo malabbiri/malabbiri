@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "submission": {
+      "title": "SubmissionRecord",
+      "description": "Catatan permohonan layanan publik digital Bimas Islam Kemenag Gowa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "serviceId": { "type": "number" },
+        "serviceTitle": { "type": "string" },
+        "applicantName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "institutionName": { "type": "string" },
+        "district": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "status": { "type": "string" },
+        "verificationCode": { "type": "string" },
+        "officerNotes": { "type": "string" }
+      },
+      "required": ["id", "serviceId", "serviceTitle", "applicantName", "phone", "address", "submittedAt", "status", "verificationCode"]
+    },
+    "survey": {
+      "title": "SurveyRecord",
+      "description": "Indeks Kepuasan Masyarakat (IKM) atas pelayanan Bimas Islam",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "applicantName": { "type": "string" },
+        "serviceTitle": { "type": "string" },
+        "overallRating": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "applicantName", "serviceTitle", "overallRating", "createdAt"]
+    },
+    "officer": {
+      "title": "OfficerAccount",
+      "description": "Akun petugas verifikator Seksi Bimas Islam",
+      "type": "object",
+      "properties": {
+        "nip": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "pin": { "type": "string" }
+      },
+      "required": ["nip", "username", "name", "role", "pin"]
+    }
+  },
+  "firestore": {
+    "/submissions/{submissionId}": {
+      "schema": "submission",
+      "description": "Daftar permohonan layanan publik digital MALA'BIRI"
+    },
+    "/surveys/{surveyId}": {
+      "schema": "survey",
+      "description": "Daftar penilaian kepuasan masyarakat terhadap layanan"
+    },
+    "/officers/{officerId}": {
+      "schema": "officer",
+      "description": "Daftar akun petugas verifikasi Bimas Islam"
+    }
+  }
+}

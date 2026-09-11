@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.size() > 0;
+    }
+
+    // Submissions: Public citizen applications for Bimas Islam services
+    match /submissions/{submissionId} {
+      allow read: if true;
+      allow create: if isValidId(submissionId)
+                    && request.resource.data.id is string
+                    && request.resource.data.applicantName is string
+                    && request.resource.data.serviceTitle is string
+                    && request.resource.data.status is string;
+      allow update: if isValidId(submissionId)
+                    && request.resource.data.id == resource.data.id;
+      allow delete: if isValidId(submissionId);
+    }
+
+    // Surveys: Community Satisfaction Index (IKM)
+    match /surveys/{surveyId} {
+      allow read: if true;
+      allow create: if isValidId(surveyId)
+                    && request.resource.data.id is string
+                    && request.resource.data.applicantName is string
+                    && request.resource.data.serviceTitle is string;
+      allow update, delete: if false;
+    }
+
+    // Officer accounts for cross-device authentication
+    match /officers/{officerId} {
+      allow read: if true;
+      allow write: if isValidId(officerId);
+    }
+
+    // Connection test document
+    match /_connection_test/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Default deny all unmatched collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

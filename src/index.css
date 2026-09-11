@@ -1,0 +1,242 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #0b3d60 0%, #08694b 45%, #053b49 75%, #022129 100%);
+    background-attachment: fixed;
+    color: #f8fafc;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Utility kelas teks timbul halus hanya untuk judul hero utama pada latar belakang gelap */
+.teks-timbul-display {
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45) !important;
+}
+
+.teks-timbul-heading {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Penegasan: Seluruh elemen kartu putih, form, input, dan teks informatif wajib tajam, jelas, dan tanpa bayangan kabur */
+.bg-white,
+.bg-white *,
+.glass-card-white,
+.glass-card-white *,
+.card-clean,
+.card-clean *,
+table,
+table *,
+input,
+textarea,
+select {
+  text-shadow: none !important;
+}
+
+/* Immersive UI Glassmorphism Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.28);
+}
+
+.glass-panel-immersive {
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow: 0 20px 45px 0 rgba(4, 47, 46, 0.35);
+}
+
+.glass-card-white {
+  background: #ffffff;
+  color: #1e293b;
+  border-bottom: 4px solid #10b981;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-white:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 35px -8px rgba(16, 185, 129, 0.3), 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-bottom-color: #059669;
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 18px 42px 0 rgba(8, 127, 91, 0.3);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.glass-input::placeholder {
+  color: rgba(209, 250, 229, 0.7);
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.glass-header {
+  background: rgba(15, 76, 117, 0.45);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.glass-modal {
+  background: rgba(11, 55, 84, 0.95);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.75);
+}
+
+/* Islamic arabesque subtle geometric background */
+.bg-islamic-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px),
+                    radial-gradient(rgba(52, 211, 153, 0.15) 1px, transparent 1px);
+  background-size: 36px 36px;
+  background-position: 0 0, 18px 18px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 76, 117, 0.4);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.5);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.8);
+}
+
+/* Print styling for Official Documents (Kop Surat, Tanda Terima, Surat Keterangan, Berita Acara) */
+@media print {
+  @page {
+    margin: 10mm 15mm 10mm 15mm;
+    size: A4 portrait;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* When receipt modal is open, strictly hide ALL background elements */
+  body.receipt-modal-active #root > div > *:not(.print-receipt-modal-root),
+  body.receipt-modal-active header,
+  body.receipt-modal-active nav,
+  body.receipt-modal-active main,
+  body.receipt-modal-active footer,
+  body.receipt-modal-active aside,
+  header,
+  nav,
+  main,
+  footer,
+  aside,
+  .no-print,
+  button,
+  .fixed.bottom-6 {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Strip modal background, blur, and fixed overlays */
+  .print-receipt-modal-root,
+  .fixed.inset-0 {
+    position: static !important;
+    inset: auto !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  .printable-modal-card {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* The printable document sheet */
+  #printable-receipt-content,
+  .printable-sheet {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .printable-content {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure colors, borders, and text print sharp and crisp */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

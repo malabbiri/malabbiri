@@ -1,0 +1,6 @@
+{
+  "name": "MALA'BIRI - Bimas Islam Kemenag Gowa",
+  "description": "Manajemen Layanan Bimas Islam yang Responsif - Kantor Kementerian Agama Kabupaten Gowa",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
