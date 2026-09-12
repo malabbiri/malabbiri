@@ -21,9 +21,12 @@ export interface UploadedFileInfo {
   fileType: string;
   uploadedAt: string;
   dataUrl?: string; // Base64 or Blob URL for viewing and downloading
+  cloudStorageUrl?: string; // Direct Firebase Cloud Storage URL for cross-device raw file access (up to 10MB+)
   googleDriveFileId?: string; // Google Drive file ID
   googleDriveViewUrl?: string; // Google Drive web preview URL
   googleDriveDownloadUrl?: string; // Direct Google Drive download URL
+  fileChunkId?: string; // ID for retrieving large file from Firestore chunks (100% free)
+  fileChunkCount?: number; // Total chunks stored in Firestore
 }
 
 export interface OfficerAccount {

@@ -60,6 +60,12 @@
     "/officers/{officerId}": {
       "schema": "officer",
       "description": "Daftar akun petugas verifikasi Bimas Islam"
+    },
+    "/app_settings/{settingId}": {
+      "description": "Konfigurasi integrasi sistem (misal Google Drive Apps Script URL)"
+    },
+    "/file_chunks/{chunkId}": {
+      "description": "Penyimpanan berkas asli terbagi (chunked) gratis antar perangkat"
     }
   }
 }

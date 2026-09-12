@@ -15,6 +15,7 @@ import {
 import { UploadedFileInfo } from '../types';
 import { downloadFile, generateSampleDocumentBlob, dataURLtoBlob } from '../utils/fileHelper';
 import { generateFileKey, getFileFromDb } from '../utils/indexedDbStorage';
+import { getFileFromChunks } from '../utils/chunkedStorage';
 
 interface DocumentViewerModalProps {
   file: UploadedFileInfo;
@@ -42,10 +43,31 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     async function resolveFileUrl() {
       setIsLoading(true);
       try {
+        // 0. Check if file has Firebase Cloud Storage URL (direct permanent raw file across all devices)
+        if (file.cloudStorageUrl) {
+          if (isMounted) {
+            setActiveUrl(file.cloudStorageUrl);
+            setIsLoading(false);
+          }
+          return;
+        }
+
         // 0. Check if file has Google Drive URL
         if (file.googleDriveViewUrl) {
           if (isMounted) {
-            setActiveUrl(file.googleDriveViewUrl);
+            const drivePreviewUrl = file.googleDriveFileId 
+              ? `https://drive.google.com/file/d/${file.googleDriveFileId}/preview`
+              : file.googleDriveViewUrl;
+            setActiveUrl(drivePreviewUrl);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // 0b. Check if file has Firebase Cloud Storage URL
+        if (file.cloudStorageUrl) {
+          if (isMounted) {
+            setActiveUrl(file.cloudStorageUrl);
             setIsLoading(false);
           }
           return;
@@ -53,7 +75,19 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
         let rawUrl = file.dataUrl;
 
-        // 1. Check IndexedDB if missing in memory
+        // 1. Check Chunked Firestore (100% Free Cross-Device Storage)
+        if (!rawUrl && file.fileChunkId) {
+          try {
+            const chunkedData = await getFileFromChunks(file.fileChunkId);
+            if (chunkedData) {
+              rawUrl = chunkedData;
+            }
+          } catch (chunkErr) {
+            console.warn('Could not load file from chunks:', chunkErr);
+          }
+        }
+
+        // 1b. Check IndexedDB if missing in memory
         if (!rawUrl && submissionId) {
           const key = generateFileKey(submissionId, file.fileName, file.fieldName);
           const fromDb = await getFileFromDb(key);
@@ -133,8 +167,9 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 <h3 className="text-sm font-bold text-white max-w-md truncate">
                   {file.fileName}
                 </h3>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-semibold">
-                  Tersimpan di Sistem
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {file.googleDriveViewUrl ? 'Google Drive Kantor' : file.cloudStorageUrl ? 'Cloud Storage' : file.fileChunkId ? 'Arsip Berkas Asli' : 'Tersimpan di Sistem'}
                 </span>
               </div>
               <p className="text-xs text-emerald-100">
@@ -219,6 +254,15 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             <div className="flex flex-col items-center justify-center p-12 text-center space-y-3">
               <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
               <p className="text-sm text-slate-300">Menyiapkan pratinjau berkas...</p>
+            </div>
+          ) : activeUrl && activeUrl.includes('drive.google.com') ? (
+            <div className="w-full h-[560px] bg-slate-900 rounded-xl overflow-hidden border border-white/10 relative">
+              <iframe 
+                src={activeUrl}
+                className="w-full h-full border-0"
+                allow="autoplay"
+                title={file.fileName}
+              />
             </div>
           ) : isImage && activeUrl ? (
             <div className="overflow-auto max-h-full flex justify-center">

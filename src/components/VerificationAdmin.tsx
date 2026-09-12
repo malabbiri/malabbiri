@@ -27,7 +27,8 @@ import {
   Users,
   UserPlus,
   Trash2,
-  Printer
+  Printer,
+  Cloud
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { formatIndoDate } from '../utils/date';
@@ -35,7 +36,9 @@ import { updateSubmissionStatus, clearAllSubmissions } from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
+import { getGoogleAppsScriptUrl } from '../utils/googleAppsScript';
 import { DocumentViewerModal } from './DocumentViewerModal';
+import { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';
 
 interface VerificationAdminProps {
   submissions: SubmissionRecord[];
@@ -72,6 +75,16 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     submissionId?: string;
     applicantName?: string;
   } | null>(null);
+
+  // Google Drive integration modal state
+  const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(false);
+  const [isGasConfigured, setIsGasConfigured] = useState(false);
+
+  React.useEffect(() => {
+    getGoogleAppsScriptUrl().then((url) => {
+      setIsGasConfigured(!!url);
+    });
+  }, [isGoogleDriveModalOpen]);
 
   // Officer accounts management modal states
   const [isManageOfficersOpen, setIsManageOfficersOpen] = useState(false);
@@ -283,6 +296,20 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
+          <button
+            onClick={() => setIsGoogleDriveModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white border border-emerald-400/40 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+            title="Integrasi Google Drive Kantor (100% Gratis Selamanya)"
+          >
+            <Cloud className="w-4 h-4 text-emerald-300" />
+            <span>Google Drive Kantor</span>
+            {isGasConfigured ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Terhubung"></span>
+            ) : (
+              <span className="px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 text-[9px] font-bold">Setel</span>
+            )}
+          </button>
+
           <button
             onClick={handleOpenManageOfficers}
             className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-200 hover:text-white border border-white/20 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
@@ -706,7 +733,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                               • {new Date(file.uploadedAt).toLocaleDateString('id-ID')}
                             </span>
                             <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-semibold">
-                              Tersimpan Digital
+                              {file.cloudStorageUrl ? 'Firebase Cloud' : 'Tersimpan Digital'}
                             </span>
                           </div>
                         </div>
@@ -1017,6 +1044,16 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </div>
         </div>
       )}
+
+      {/* Google Drive Integration Modal */}
+      <GoogleDriveIntegrationModal
+        isOpen={isGoogleDriveModalOpen}
+        onClose={() => {
+          setIsGoogleDriveModalOpen(false);
+          getGoogleAppsScriptUrl().then((url) => setIsGasConfigured(!!url));
+        }}
+        officerName={officer.name}
+      />
     </div>
   );
 };

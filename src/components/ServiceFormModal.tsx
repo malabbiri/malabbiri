@@ -19,9 +19,12 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ServiceDefinition, UploadedFileInfo, SubmissionRecord } from '../types';
-import { createNewSubmission } from '../utils/storage';
+import { generateSubmissionId, createNewSubmission } from '../utils/storage';
 import { generateSubmissionWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { readFileAsDataURL } from '../utils/fileHelper';
+import { uploadRawFileToCloudStorage } from '../utils/cloudStorage';
+import { getGoogleAppsScriptUrl, uploadFileToGoogleDriveViaScript } from '../utils/googleAppsScript';
+import { saveFileInChunks } from '../utils/chunkedStorage';
 import { 
   requestGoogleDriveAccess, 
   getOrCreateDriveFolder, 
@@ -198,33 +201,110 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
         }
       });
 
-      // Attempt upload to Google Drive if configured and token is available or can be requested
+      // Generate designated Submission ID first
+      const submissionId = generateSubmissionId();
+
+      // Check for office Google Drive Webhook (Google Apps Script - 100% Free)
+      const gasUrl = await getGoogleAppsScriptUrl();
+
+      // Store files across multiple resilient zero-cost cloud channels
       if (allFiles.length > 0) {
-        setUploadProgressText('Memproses penyimpanan berkas permohonan...');
+        for (let i = 0; i < allFiles.length; i++) {
+          const fileInfo = allFiles[i];
+          const fileKey = `${fileInfo.fieldName}_${fileInfo.fileName}_${fileInfo.fileSize}`;
+          const rawFile = rawFilesMap[fileKey];
+
+          let blobToUpload: Blob | null = null;
+          if (rawFile) {
+            blobToUpload = rawFile;
+          } else if (fileInfo.dataUrl) {
+            try {
+              const res = await fetch(fileInfo.dataUrl);
+              blobToUpload = await res.blob();
+            } catch (bErr) {
+              console.warn('Could not convert dataUrl to blob', bErr);
+            }
+          }
+
+          // 1. PRIMARY (OPSI 1): Direct to Google Drive via Google Apps Script Webhook (100% Gratis)
+          if (gasUrl && fileInfo.dataUrl) {
+            setUploadProgressText(`Menyimpan ke Google Drive Kantor (${i + 1}/${allFiles.length}): ${fileInfo.fileName}...`);
+            try {
+              const gasResult = await uploadFileToGoogleDriveViaScript(
+                gasUrl,
+                fileInfo.dataUrl,
+                fileInfo.fileName,
+                fileInfo.fileType,
+                submissionId,
+                fileInfo.fieldName
+              );
+              fileInfo.googleDriveFileId = gasResult.fileId;
+              fileInfo.googleDriveViewUrl = gasResult.viewUrl;
+              fileInfo.googleDriveDownloadUrl = gasResult.downloadUrl;
+              console.log(`Uploaded to Google Drive via Apps Script: ${fileInfo.fileName}`);
+            } catch (gasErr) {
+              console.warn(`Apps Script upload note for ${fileInfo.fileName}:`, gasErr);
+            }
+          }
+
+          // 2. FALLBACK/BACKUP: Chunked Firestore Storage (100% Gratis di paket Spark)
+          if (fileInfo.dataUrl && fileInfo.dataUrl.length > 10000) {
+            try {
+              setUploadProgressText(`Mengamankan arsip berkas (${i + 1}/${allFiles.length}): ${fileInfo.fileName}...`);
+              const chunkId = `chk_${submissionId}_${i}`;
+              const count = await saveFileInChunks(
+                chunkId,
+                submissionId,
+                fileInfo.fileName,
+                fileInfo.fileType,
+                fileInfo.dataUrl
+              );
+              fileInfo.fileChunkId = chunkId;
+              fileInfo.fileChunkCount = count;
+            } catch (chunkErr) {
+              console.warn(`Chunked storage notice for ${fileInfo.fileName}:`, chunkErr);
+            }
+          }
+
+          // 3. OPTIONAL: If Firebase Storage is configured without Blaze restriction
+          if (blobToUpload && !fileInfo.googleDriveViewUrl) {
+            try {
+              const cloudUrl = await uploadRawFileToCloudStorage(
+                blobToUpload,
+                submissionId,
+                fileInfo.fileName,
+                fileInfo.fieldName
+              );
+              fileInfo.cloudStorageUrl = cloudUrl;
+            } catch (cloudStorageErr) {
+              // Non-blocking: will safely use Google Drive or Chunked Firestore
+            }
+          }
+        }
+      }
+
+      // 4. Secondary manual Google Drive OAuth (if officer is logged in and authorized)
+      if (allFiles.length > 0 && !gasUrl) {
         let driveToken = getStoredDriveToken();
 
         if (!driveToken) {
           try {
-            // Only prompt if Google Identity Services is available
             driveToken = await Promise.race([
               requestGoogleDriveAccess(),
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000))
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
             ]);
           } catch (authErr: any) {
-            console.warn('Google Drive authorization skipped or denied, proceeding with high-speed cloud storage:', authErr);
-            // Non-fatal: files are stored securely in database & local storage
+            console.warn('Google Drive sync skipped:', authErr);
           }
         }
 
         if (driveToken) {
           try {
-            setUploadProgressText('Menyinkronkan berkas ke Google Drive...');
+            setUploadProgressText('Menyinkronkan salinan ke Google Drive...');
             const folderId = await getOrCreateDriveFolder(driveToken);
 
             for (let i = 0; i < allFiles.length; i++) {
               const fileInfo = allFiles[i];
-              setUploadProgressText(`Menyimpan ke Google Drive (${i + 1}/${allFiles.length}): ${fileInfo.fileName}...`);
-              
               const fileKey = `${fileInfo.fieldName}_${fileInfo.fileName}_${fileInfo.fileSize}`;
               const rawFile = rawFilesMap[fileKey];
 
@@ -236,7 +316,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   const res = await fetch(fileInfo.dataUrl);
                   blobToUpload = await res.blob();
                 } catch (bErr) {
-                  console.warn('Could not convert dataUrl to blob', bErr);
+                  // ignore
                 }
               }
 
@@ -252,12 +332,12 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   fileInfo.googleDriveViewUrl = driveResult.viewUrl;
                   fileInfo.googleDriveDownloadUrl = driveResult.downloadUrl;
                 } catch (uploadErr) {
-                  console.warn(`Drive upload notice for ${fileInfo.fileName}:`, uploadErr);
+                  console.warn(`Drive notice for ${fileInfo.fileName}:`, uploadErr);
                 }
               }
             }
           } catch (driveErr) {
-            console.warn('Drive sync batch notice:', driveErr);
+            console.warn('Drive sync notice:', driveErr);
           }
         }
       }
@@ -271,6 +351,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       const district = formData['district'];
 
       const newRecord = createNewSubmission({
+        id: submissionId,
         serviceId: service.id,
         serviceTitle: service.title,
         applicantName,

@@ -3,6 +3,7 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firesto
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { jsPDF } from 'jspdf';
 import { generateFileKey, getFileFromDb, storeFileInDb } from './indexedDbStorage';
+import { getFileFromChunks } from './chunkedStorage';
 
 const OFFICERS_STORAGE_KEY = 'malabbiri_officers_v2';
 const OFFICER_SESSION_KEY = 'malabbiri_officer_session_v2';
@@ -518,7 +519,30 @@ Status           : Terverifikasi oleh Sistem MALA'BIRI Kemenag Kab. Gowa
  */
 export async function downloadFile(file: UploadedFileInfo, submissionId?: string, applicantName?: string): Promise<void> {
   try {
-    // 0. Highest priority: If file has a Google Drive download URL, trigger direct cloud download!
+    // 0. Highest priority: If file has Firebase Cloud Storage URL (direct permanent raw file)
+    if (file.cloudStorageUrl) {
+      try {
+        const response = await fetch(file.cloudStorageUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          const downloadUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = file.fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+          return;
+        }
+      } catch (cloudErr) {
+        console.warn('Direct blob fetch failed, falling back to window navigation:', cloudErr);
+        window.open(file.cloudStorageUrl, '_blank');
+        return;
+      }
+    }
+
+    // 0b. If file has a Google Drive download URL, trigger direct cloud download!
     if (file.googleDriveDownloadUrl) {
       const a = document.createElement('a');
       a.href = file.googleDriveDownloadUrl;
@@ -544,7 +568,19 @@ export async function downloadFile(file: UploadedFileInfo, submissionId?: string
       }
     }
 
-    // 2. Second priority: If no dataUrl in memory, look up IndexedDB persistent file storage
+    // 2. Second priority: If no dataUrl in memory, check Chunked Firestore (100% Free Cross-Device)
+    if (!blob && file.fileChunkId) {
+      try {
+        const chunkedBase64 = await getFileFromChunks(file.fileChunkId);
+        if (chunkedBase64 && chunkedBase64.startsWith('data:')) {
+          blob = dataURLtoBlob(chunkedBase64);
+        }
+      } catch (chunkErr) {
+        console.warn('Could not reassemble file from chunks:', chunkErr);
+      }
+    }
+
+    // 2b. Third priority: Check IndexedDB persistent file storage
     if (!blob && submissionId) {
       const dbKey = generateFileKey(submissionId, file.fileName, file.fieldName);
       const storedDataUrl = await getFileFromDb(dbKey);
@@ -557,7 +593,7 @@ export async function downloadFile(file: UploadedFileInfo, submissionId?: string
       }
     }
 
-    // 3. Third priority: Generate real standard document Blob (Real jsPDF for PDFs!)
+    // 3. Fourth priority: Generate real standard document Blob (Real jsPDF for PDFs!)
     if (!blob) {
       if (isPdf) {
         blob = generateSamplePdfBlob(file, submissionId, applicantName);

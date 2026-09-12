@@ -323,12 +323,16 @@ export async function clearAllSubmissions(): Promise<void> {
   }
 }
 
-export function createNewSubmission(
-  newRecord: Omit<SubmissionRecord, 'id' | 'verificationCode' | 'statusHistory'>
-): SubmissionRecord {
+export function generateSubmissionId(): string {
   const year = new Date().getFullYear();
   const randomNum = Math.floor(1000 + Math.random() * 9000);
-  const id = `MLB-${year}-${randomNum}`;
+  return `MLB-${year}-${randomNum}`;
+}
+
+export function createNewSubmission(
+  newRecord: Omit<SubmissionRecord, 'id' | 'verificationCode' | 'statusHistory'> & { id?: string }
+): SubmissionRecord {
+  const id = newRecord.id || generateSubmissionId();
   const verificationCode = `VRF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
   const submission: SubmissionRecord = {

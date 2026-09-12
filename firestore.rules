@@ -36,6 +36,18 @@ service cloud.firestore {
       allow write: if isValidId(officerId);
     }
 
+    // App settings (such as office Google Drive webhook URL)
+    match /app_settings/{settingId} {
+      allow read: if true;
+      allow write: if isValidId(settingId);
+    }
+
+    // Free chunked storage for original documents across devices
+    match /file_chunks/{chunkId} {
+      allow read: if true;
+      allow write: if isValidId(chunkId);
+    }
+
     // Connection test document
     match /_connection_test/{id} {
       allow read: if true;
