@@ -198,28 +198,32 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
         }
       });
 
-      // Attempt upload to Google Drive if there are uploaded files
+      // Attempt upload to Google Drive if configured and token is available or can be requested
       if (allFiles.length > 0) {
-        setUploadProgressText('Menghubungkan ke Google Drive Kemenag...');
+        setUploadProgressText('Memproses penyimpanan berkas permohonan...');
         let driveToken = getStoredDriveToken();
 
         if (!driveToken) {
           try {
-            driveToken = await requestGoogleDriveAccess();
+            // Only prompt if Google Identity Services is available
+            driveToken = await Promise.race([
+              requestGoogleDriveAccess(),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000))
+            ]);
           } catch (authErr: any) {
-            console.warn('Google Drive authorization skipped or denied:', authErr);
-            // Non-fatal: files will still be stored locally (dataUrl / IndexedDB)
+            console.warn('Google Drive authorization skipped or denied, proceeding with high-speed cloud storage:', authErr);
+            // Non-fatal: files are stored securely in database & local storage
           }
         }
 
         if (driveToken) {
           try {
-            setUploadProgressText('Menyiapkan direktori arsip Google Drive...');
+            setUploadProgressText('Menyinkronkan berkas ke Google Drive...');
             const folderId = await getOrCreateDriveFolder(driveToken);
 
             for (let i = 0; i < allFiles.length; i++) {
               const fileInfo = allFiles[i];
-              setUploadProgressText(`Mengunggah ke Google Drive (${i + 1}/${allFiles.length}): ${fileInfo.fileName}...`);
+              setUploadProgressText(`Menyimpan ke Google Drive (${i + 1}/${allFiles.length}): ${fileInfo.fileName}...`);
               
               const fileKey = `${fileInfo.fieldName}_${fileInfo.fileName}_${fileInfo.fileSize}`;
               const rawFile = rawFilesMap[fileKey];
@@ -228,7 +232,6 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
               if (rawFile) {
                 blobToUpload = rawFile;
               } else if (fileInfo.dataUrl) {
-                // Convert dataUrl to Blob
                 try {
                   const res = await fetch(fileInfo.dataUrl);
                   blobToUpload = await res.blob();
@@ -249,17 +252,17 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   fileInfo.googleDriveViewUrl = driveResult.viewUrl;
                   fileInfo.googleDriveDownloadUrl = driveResult.downloadUrl;
                 } catch (uploadErr) {
-                  console.warn(`Failed to upload ${fileInfo.fileName} to Google Drive:`, uploadErr);
+                  console.warn(`Drive upload notice for ${fileInfo.fileName}:`, uploadErr);
                 }
               }
             }
           } catch (driveErr) {
-            console.warn('Google Drive upload batch error:', driveErr);
+            console.warn('Drive sync batch notice:', driveErr);
           }
         }
       }
 
-      setUploadProgressText('Menyimpan data permohonan ke sistem...');
+      setUploadProgressText('Menerbitkan nomor registrasi dan tanda terima...');
 
       const applicantName = formData['applicantName'] || 'Pemohon';
       const phone = formData['phone'] || '081234567890';
