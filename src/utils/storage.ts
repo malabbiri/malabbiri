@@ -13,8 +13,8 @@ import { SubmissionRecord, SurveyRecord, ApplicationStatus } from '../types';
 import { INITIAL_SUBMISSIONS, INITIAL_SURVEYS } from '../data/initialData';
 import { generateFileKey, storeFileInDb } from './indexedDbStorage';
 
-const SUBMISSIONS_KEY = 'malabbiri_submissions_v2';
-const SURVEYS_KEY = 'malabbiri_surveys_v2';
+const SUBMISSIONS_KEY = 'malabbiri_submissions_v3';
+const SURVEYS_KEY = 'malabbiri_surveys_v3';
 
 // In-memory cache for synchronous render
 let cachedSubmissions: SubmissionRecord[] = [];
@@ -23,20 +23,25 @@ let cachedSurveys: SurveyRecord[] = [];
 // Initialize memory cache from localStorage
 try {
   if (typeof window !== 'undefined' && window.localStorage) {
+    // Purge deprecated v1 and v2 old cached keys immediately
+    ['malabbiri_submissions_v1', 'malabbiri_submissions_v2', 'malabbiri_submissions'].forEach((oldKey) => {
+      try { localStorage.removeItem(oldKey); } catch (e) { /* ignore */ }
+    });
+
     const rawSubs = localStorage.getItem(SUBMISSIONS_KEY);
     if (rawSubs) {
       cachedSubmissions = JSON.parse(rawSubs);
-    } else if (INITIAL_SUBMISSIONS.length > 0) {
-      cachedSubmissions = [...INITIAL_SUBMISSIONS];
-      localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(cachedSubmissions));
+    } else {
+      cachedSubmissions = [];
+      localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify([]));
     }
 
     const rawSurveys = localStorage.getItem(SURVEYS_KEY);
     if (rawSurveys) {
       cachedSurveys = JSON.parse(rawSurveys);
-    } else if (INITIAL_SURVEYS.length > 0) {
-      cachedSurveys = [...INITIAL_SURVEYS];
-      localStorage.setItem(SURVEYS_KEY, JSON.stringify(cachedSurveys));
+    } else {
+      cachedSurveys = [];
+      localStorage.setItem(SURVEYS_KEY, JSON.stringify([]));
     }
   }
 } catch (err) {
@@ -194,33 +199,9 @@ export function initFirestoreSync() {
     onSnapshot(
       qSurveys,
       (snapshot) => {
-        if (snapshot.empty && cachedSurveys.length > 0) {
-          cachedSurveys.forEach(async (srv) => {
-            try {
-              const safe = sanitizeForFirestore(srv);
-              await setDoc(doc(db, 'surveys', srv.id), safe);
-            } catch (e) {
-              // ignore
-            }
-          });
-          return;
-        }
-
         const remoteList: SurveyRecord[] = [];
         snapshot.forEach((d) => {
           remoteList.push(d.data() as SurveyRecord);
-        });
-
-        const remoteIds = new Set(remoteList.map((s) => s.id));
-        cachedSurveys.forEach(async (localSrv) => {
-          if (!remoteIds.has(localSrv.id)) {
-            try {
-              await setDoc(doc(db, 'surveys', localSrv.id), sanitizeForFirestore(localSrv));
-              remoteList.push(localSrv);
-            } catch (e) {
-              // ignore
-            }
-          }
         });
 
         remoteList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -279,20 +260,30 @@ export function saveSubmissions(list: SubmissionRecord[]): void {
 
 export async function clearAllSubmissions(): Promise<void> {
   cachedSubmissions = [];
+  
+  // Wipe all known localStorage keys
   try {
-    localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify([]));
+    if (typeof window !== 'undefined' && window.localStorage) {
+      ['malabbiri_submissions', 'malabbiri_submissions_v1', 'malabbiri_submissions_v2', 'malabbiri_submissions_v3'].forEach((k) => {
+        try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+      });
+      localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify([]));
+    }
   } catch (err) {
-    console.error('Failed to clear submissions:', err);
+    console.error('Failed to clear submissions from localStorage:', err);
   }
+  
   notifySubmissionsListeners();
 
   // Also remove from Firestore cloud
   try {
     const snapshot = await getDocs(collection(db, 'submissions'));
-    const deletePromises = snapshot.docs.map((d) => deleteDoc(d.ref));
-    await Promise.all(deletePromises);
+    if (!snapshot.empty) {
+      const deletePromises = snapshot.docs.map((d) => deleteDoc(d.ref));
+      await Promise.all(deletePromises);
+    }
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, 'submissions');
+    console.error('Firestore delete error:', err);
   }
 }
 

@@ -169,7 +169,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       try {
         await clearAllSubmissions();
         onRefreshSubmissions();
+        // Also force wipe window storage keys
+        try {
+          ['malabbiri_submissions', 'malabbiri_submissions_v1', 'malabbiri_submissions_v2', 'malabbiri_submissions_v3'].forEach(k => localStorage.removeItem(k));
+        } catch (e) { /* ignore */ }
         alert('Seluruh data permohonan lama telah berhasil dikosongkan!');
+        onRefreshSubmissions();
       } catch (err: any) {
         console.error('Gagal mengosongkan data:', err);
         onRefreshSubmissions();
