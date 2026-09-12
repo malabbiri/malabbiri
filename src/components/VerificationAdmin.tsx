@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { formatIndoDate } from '../utils/date';
-import { updateSubmissionStatus, clearAllSubmissions } from '../utils/storage';
+import { updateSubmissionStatus, clearAllSubmissions, deleteSubmission } from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
@@ -165,8 +165,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   };
 
   const handlePurgeAllSubmissions = () => {
-    if (window.confirm('PERINGATAN: Apakah Anda yakin ingin mengosongkan SELURUH data permohonan yang ada di sistem? Tindakan ini tidak dapat dibatalkan.')) {
+    if (window.confirm('PERINGATAN: Apakah Anda yakin ingin mengosongkan SELURUH data permohonan lama di sistem? Tindakan ini akan membersihkan semua data agar Anda dapat melakukan uji coba baru.')) {
       clearAllSubmissions();
+      onRefreshSubmissions();
+    }
+  };
+
+  const handleDeleteSingleSubmission = (id: string, name: string) => {
+    if (window.confirm(`Hapus berkas permohonan ${id} atas nama "${name}"?`)) {
+      deleteSubmission(id);
       onRefreshSubmissions();
     }
   };
@@ -597,6 +604,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     >
                       <MessageCircle className="w-3.5 h-3.5 fill-current" />
                     </button>
+
+                    <button
+                      onClick={() => handleDeleteSingleSubmission(sub.id, sub.applicantName || 'Pemohon')}
+                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-300 border border-red-500/20 inline-flex items-center transition-colors cursor-pointer"
+                      title="Hapus Data Permohonan Ini"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </td>
                 </tr>
                 );
@@ -829,15 +844,32 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenReceipt(selectedSubmission)}
-                    className="px-3.5 py-2.5 rounded-xl glass-panel hover:bg-white/10 text-slate-300 font-semibold text-xs flex items-center gap-2 cursor-pointer"
-                    title="Pratinjau Tanda Terima Resmi (Kop Surat Kemenag Gowa)"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Cetak Tanda Terima</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSubmission) {
+                          handleDeleteSingleSubmission(selectedSubmission.id, selectedSubmission.applicantName || 'Pemohon');
+                          setSelectedSubmission(null);
+                        }
+                      }}
+                      className="px-3.5 py-2.5 rounded-xl bg-red-950/30 hover:bg-red-900/50 text-red-300 border border-red-500/30 font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
+                      title="Hapus permohonan ini"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus Permohonan</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenReceipt(selectedSubmission)}
+                      className="px-3.5 py-2.5 rounded-xl glass-panel hover:bg-white/10 text-slate-300 font-semibold text-xs flex items-center gap-2 cursor-pointer"
+                      title="Pratinjau Tanda Terima Resmi (Kop Surat Kemenag Gowa)"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Cetak Tanda Terima</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <button

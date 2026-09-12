@@ -382,6 +382,19 @@ export function createNewSubmission(
   return submission;
 }
 
+export async function deleteSubmission(id: string): Promise<boolean> {
+  cachedSubmissions = cachedSubmissions.filter((item) => item.id.toUpperCase() !== id.toUpperCase());
+  saveSubmissions([...cachedSubmissions]);
+
+  // Delete from Firestore
+  try {
+    await deleteDoc(doc(db, 'submissions', id));
+  } catch (err) {
+    console.error('Failed to delete submission from Firestore:', err);
+  }
+  return true;
+}
+
 export function updateSubmissionStatus(
   id: string,
   newStatus: ApplicationStatus,
