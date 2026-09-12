@@ -164,17 +164,28 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     }
   };
 
-  const handlePurgeAllSubmissions = () => {
+  const handlePurgeAllSubmissions = async () => {
     if (window.confirm('PERINGATAN: Apakah Anda yakin ingin mengosongkan SELURUH data permohonan lama di sistem? Tindakan ini akan membersihkan semua data agar Anda dapat melakukan uji coba baru.')) {
-      clearAllSubmissions();
-      onRefreshSubmissions();
+      try {
+        await clearAllSubmissions();
+        onRefreshSubmissions();
+        alert('Seluruh data permohonan lama telah berhasil dikosongkan!');
+      } catch (err: any) {
+        console.error('Gagal mengosongkan data:', err);
+        onRefreshSubmissions();
+      }
     }
   };
 
-  const handleDeleteSingleSubmission = (id: string, name: string) => {
+  const handleDeleteSingleSubmission = async (id: string, name: string) => {
     if (window.confirm(`Hapus berkas permohonan ${id} atas nama "${name}"?`)) {
-      deleteSubmission(id);
-      onRefreshSubmissions();
+      try {
+        await deleteSubmission(id);
+        onRefreshSubmissions();
+      } catch (err: any) {
+        console.error('Gagal menghapus data:', err);
+        onRefreshSubmissions();
+      }
     }
   };
 

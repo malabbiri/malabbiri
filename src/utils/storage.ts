@@ -130,36 +130,9 @@ export function initFirestoreSync() {
     onSnapshot(
       qSubmissions,
       (snapshot) => {
-        if (snapshot.empty && cachedSubmissions.length > 0) {
-          // If Firestore is empty but local storage has data (e.g. data lama), migrate to Firestore
-          cachedSubmissions.forEach(async (sub) => {
-            try {
-              const safeData = sanitizeForFirestore(sub);
-              await setDoc(doc(db, 'submissions', sub.id), safeData);
-            } catch (err) {
-              console.warn('Initial cloud migration notice:', err);
-            }
-          });
-          return;
-        }
-
         const remoteList: SubmissionRecord[] = [];
         snapshot.forEach((d) => {
           remoteList.push(d.data() as SubmissionRecord);
-        });
-
-        // Merge: If there are local items not in Firestore yet, sync them up
-        const remoteIds = new Set(remoteList.map((s) => s.id));
-        cachedSubmissions.forEach(async (localSub) => {
-          if (!remoteIds.has(localSub.id)) {
-            try {
-              const safe = sanitizeForFirestore(localSub);
-              await setDoc(doc(db, 'submissions', localSub.id), safe);
-              remoteList.push(localSub);
-            } catch (err) {
-              console.warn('Sync local item to cloud:', err);
-            }
-          }
         });
 
         // Preserve local file dataUrls when remote Firestore snapshot omits them
