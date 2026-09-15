@@ -101,13 +101,13 @@ export const GoogleDriveIntegrationModal: React.FC<GoogleDriveIntegrationModalPr
             </div>
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                Integrasi Google Drive Kantor
+                Integrasi Google Drive & Google Sheets Kantor
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-semibold">
-                  100% Gratis
+                  100% Gratis & Realtime
                 </span>
               </h3>
               <p className="text-xs text-emerald-100">
-                Penyimpanan berkas asli pemohon (PDF & Foto 3-10MB+) langsung ke Google Drive Kantor
+                Penyimpanan berkas ke Google Drive & pencatatan otomatis data pemohon ke Google Sheets Kantor
               </p>
             </div>
           </div>
@@ -134,12 +134,12 @@ export const GoogleDriveIntegrationModal: React.FC<GoogleDriveIntegrationModalPr
             )}
             <div className="text-xs space-y-1">
               <div className="font-bold text-sm text-white">
-                {isConfigured ? 'Google Drive Kantor Terhubung' : 'Google Drive Belum Dikonfigurasi'}
+                {isConfigured ? 'Google Drive & Google Sheets Terhubung' : 'Google Drive & Sheets Belum Dikonfigurasi'}
               </div>
               <p className="text-slate-300 leading-relaxed">
                 {isConfigured 
-                  ? 'Setiap pemohon yang mengunggah dokumen asli akan otomatis tersimpan ke Google Drive kantor pada folder ARSIP_MALABIRI_BIMAS_ISLAM_GOWA.'
-                  : 'Ikuti panduan 3 menit di bawah untuk menghubungkan Google Drive kantor Anda secara gratis (tanpa perlu bayar atau kartu kredit).'}
+                  ? 'Setiap permohonan baru akan otomatis dicatat ke Google Sheets "DATA_PERMOHONAN_MALABIRI_BIMAS_ISLAM_GOWA" dan berkas dokumen tersimpan rapi di Google Drive pada folder "ARSIP_MALABIRI_BIMAS_ISLAM_GOWA".'
+                  : 'Ikuti panduan 3 menit di bawah untuk menghubungkan Google Drive & Google Sheets kantor Anda secara gratis (tanpa perlu bayar atau kartu kredit).'}
               </p>
             </div>
           </div>

@@ -8,15 +8,20 @@ const SETTING_DOC_ID = 'google_drive_integration';
 let cachedScriptUrl: string | null = null;
 
 export const DEFAULT_SCRIPT_TEMPLATE = `/**
- * WEBHOOK GOOGLE DRIVE MALA'BIRI BIMAS ISLAM KEMENAG GOWA
- * Skrip ini menerima unggahan berkas asli dari formulir aplikasi Malabbiri
- * dan menyimpannya langsung ke Google Drive Kantor tanpa biaya (100% Gratis).
+ * WEBHOOK GOOGLE DRIVE & GOOGLE SHEET MALA'BIRI BIMAS ISLAM KEMENAG GOWA
+ * Skrip ini:
+ * 1. Menerima unggahan berkas asli pemohon dan menyimpannya ke Google Drive Kantor (100% Gratis).
+ * 2. Merekam otomatis seluruh data identitas pemohon ke Google Sheets Kantor secara realtime.
  */
+
+// Nama File Spreadsheet yang akan dibuat/digunakan otomatis di Google Drive
+var SPREADSHEET_NAME = "DATA_PERMOHONAN_MALABIRI_BIMAS_ISLAM_GOWA";
+var DRIVE_FOLDER_NAME = "ARSIP_MALABIRI_BIMAS_ISLAM_GOWA";
 
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
-    service: "MALA'BIRI Google Drive Webhook",
+    service: "MALA'BIRI Google Drive & Sheet Webhook",
     timestamp: new Date().toISOString()
   })).setMimeType(ContentService.MimeType.JSON);
 }
@@ -26,6 +31,14 @@ function doPost(e) {
     var contents = e.postData.contents;
     var data = JSON.parse(contents);
 
+    // ACTION 1: SIMPAN DATA IDENTITAS PEMOHON KE GOOGLE SHEETS
+    if (data.action === "record_submission" || data.applicantName) {
+      var sheetResult = recordSubmissionToSheet(data);
+      return ContentService.createTextOutput(JSON.stringify(sheetResult))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ACTION 2: UNGGAH BERKAS KE GOOGLE DRIVE
     var fileName = data.fileName || ("berkas_" + new Date().getTime() + ".pdf");
     var mimeType = data.mimeType || "application/pdf";
     var base64Data = data.base64;
@@ -46,11 +59,10 @@ function doPost(e) {
     var blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
 
     // Folder Utama
-    var rootFolderName = data.rootFolderName || "ARSIP_MALABIRI_BIMAS_ISLAM_GOWA";
-    var rootFolders = DriveApp.getFoldersByName(rootFolderName);
-    var targetFolder = rootFolders.hasNext() ? rootFolders.next() : DriveApp.createFolder(rootFolderName);
+    var rootFolders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
+    var targetFolder = rootFolders.hasNext() ? rootFolders.next() : DriveApp.createFolder(DRIVE_FOLDER_NAME);
 
-    // Subfolder berdasarkan Nomor Tiket / ID Permohonan
+    // Subfolder per Nomor Tiket / ID Permohonan
     if (data.submissionId) {
       var subFolders = targetFolder.getFoldersByName(data.submissionId);
       targetFolder = subFolders.hasNext() ? subFolders.next() : targetFolder.createFolder(data.submissionId);
@@ -58,8 +70,6 @@ function doPost(e) {
 
     // Simpan berkas
     var file = targetFolder.createFile(blob);
-    
-    // Beri izin akses baca bagi siapapun yang memiliki tautan
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
     var fileId = file.getId();
@@ -79,6 +89,92 @@ function doPost(e) {
       status: "error",
       message: error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Fungsi pembantu untuk mencatat baris data pemohon ke Google Sheets
+ */
+function recordSubmissionToSheet(data) {
+  try {
+    // Cari atau buat file Google Spreadsheet
+    var files = DriveApp.getFilesByName(SPREADSHEET_NAME);
+    var spreadsheet;
+    if (files.hasNext()) {
+      spreadsheet = SpreadsheetApp.open(files.next());
+    } else {
+      spreadsheet = SpreadsheetApp.create(SPREADSHEET_NAME);
+    }
+
+    var sheet = spreadsheet.getActiveSheet();
+    sheet.setName("Data Permohonan");
+
+    // Jika sheet masih baru (kosong), buat baris judul (Header Kolom)
+    if (sheet.getLastRow() === 0) {
+      var headers = [
+        "Waktu Pengajuan",
+        "Nomor Tiket (ID)",
+        "Nama Layanan",
+        "Nama Pemohon",
+        "No. WhatsApp / HP",
+        "Email",
+        "Kecamatan",
+        "Alamat Lengkap",
+        "Nama Lembaga / Masjid / KUA",
+        "Status Permohonan",
+        "Jumlah Berkas Terunggah",
+        "Tautan Berkas Google Drive",
+        "Keterangan / Catatan Tambahan"
+      ];
+      sheet.appendRow(headers);
+
+      // Format baris judul agar rapi & tebal
+      var headerRange = sheet.getRange(1, 1, 1, headers.length);
+      headerRange.setBackground("#0f4c75");
+      headerRange.setFontColor("#ffffff");
+      headerRange.setFontWeight("bold");
+      headerRange.setHorizontalAlignment("center");
+      sheet.setFrozenRows(1);
+    }
+
+    // Susun baris data pemohon
+    var submittedAt = data.submittedAt ? new Date(data.submittedAt).toLocaleString("id-ID", { timeZone: "Asia/Makassar" }) : new Date().toLocaleString("id-ID", { timeZone: "Asia/Makassar" });
+    var fileLinks = "";
+    if (data.fileUrls && Array.isArray(data.fileUrls)) {
+      fileLinks = data.fileUrls.join("\\n");
+    } else if (data.filesCount) {
+      fileLinks = data.filesCount + " berkas di folder ARSIP/" + (data.id || "");
+    }
+
+    var newRow = [
+      submittedAt,
+      data.id || "-",
+      data.serviceTitle || "-",
+      data.applicantName || "-",
+      data.phone ? ("'" + data.phone) : "-", // tanda petik agar awalan 08 tidak hilang
+      data.email || "-",
+      data.district || "-",
+      data.address || "-",
+      data.institutionName || "-",
+      data.status || "SUBMITTED",
+      data.filesCount || (data.files ? data.files.length : 0),
+      fileLinks,
+      data.notes || (data.formData ? JSON.stringify(data.formData) : "-")
+    ];
+
+    sheet.appendRow(newRow);
+
+    return {
+      status: "success",
+      message: "Data pemohon berhasil direkam ke Google Sheets",
+      spreadsheetUrl: spreadsheet.getUrl(),
+      rowNumber: sheet.getLastRow()
+    };
+  } catch (err) {
+    return {
+      status: "error",
+      message: "Gagal mencatat ke sheet: " + err.toString()
+    };
   }
 }
 `;
@@ -237,4 +333,55 @@ export async function uploadFileToGoogleDriveViaScript(
     viewUrl: result.viewUrl,
     downloadUrl: result.downloadUrl
   };
+}
+
+/**
+ * Merekam data pemohon lengkap ke Google Sheets Kantor via Webhook Apps Script
+ */
+export async function sendSubmissionToGoogleSheetViaScript(
+  scriptUrl: string,
+  submission: {
+    id: string;
+    serviceTitle: string;
+    applicantName: string;
+    phone: string;
+    email?: string;
+    district?: string;
+    address: string;
+    institutionName?: string;
+    status: string;
+    submittedAt: string;
+    filesCount: number;
+    fileUrls?: string[];
+    formData?: Record<string, any>;
+  }
+): Promise<{ success: boolean; message: string; spreadsheetUrl?: string }> {
+  try {
+    const payload = {
+      action: 'record_submission',
+      ...submission
+    };
+
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      return { success: false, message: `Status HTTP ${response.status}` };
+    }
+
+    const result = await response.json();
+    return {
+      success: result.status === 'success',
+      message: result.message || 'Tercatat',
+      spreadsheetUrl: result.spreadsheetUrl
+    };
+  } catch (err: any) {
+    console.warn('Gagal mencatat ke Google Sheet otomatis:', err);
+    return { success: false, message: err.message || 'Jaringan gagal' };
+  }
 }

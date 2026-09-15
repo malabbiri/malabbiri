@@ -322,10 +322,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           <button
             onClick={() => setIsGoogleDriveModalOpen(true)}
             className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white border border-emerald-400/40 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
-            title="Integrasi Google Drive Kantor (100% Gratis Selamanya)"
+            title="Integrasi Google Drive & Google Sheets Kantor (100% Gratis Selamanya)"
           >
             <Cloud className="w-4 h-4 text-emerald-300" />
-            <span>Google Drive Kantor</span>
+            <span>Google Drive & Sheets</span>
             {isGasConfigured ? (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Terhubung"></span>
             ) : (
@@ -412,7 +412,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               </h4>
             </div>
             <p className="text-slate-200 leading-relaxed">
-              <strong className="text-white">Lokasi Penyimpanan:</strong> Dokumen yang diunggah oleh masyarakat tersimpan secara digital dan terenkripsi pada <em>Basis Data Digital MALA'BIRI</em> (Storage & Database Online Sistem Bimas Islam Kemenag Gowa).
+              <strong className="text-white">Lokasi Penyimpanan:</strong> Dokumen yang diunggah oleh masyarakat tersimpan secara digital dan terenkripsi pada <em>Basis Data Digital MALA'BIRI</em> serta otomatis terarsip ke <strong className="text-emerald-300">Google Drive & Google Sheets Kantor</strong> (pada file spreadsheet <code>DATA_PERMOHONAN_MALABIRI_BIMAS_ISLAM_GOWA</code>).
             </p>
             <p className="text-slate-200 leading-relaxed">
               <strong className="text-white">Cara Mengunduh Berkas:</strong> Verifikator dapat menekan tombol <strong className="text-emerald-300">"Periksa & Unduh Berkas"</strong> pada baris pemohon di tabel bawah. Pada jendela verifikasi, Anda dapat melakukan <span className="underline decoration-emerald-400">Pratinjau visual (Preview)</span> langsung, mengunduh file asli per dokumen, atau menekan tombol <strong className="text-white">"Unduh Semua Berkas Sekaligus"</strong> untuk menyimpan seluruh lampiran ke komputer.

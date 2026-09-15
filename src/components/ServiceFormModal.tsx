@@ -23,7 +23,7 @@ import { generateSubmissionId, createNewSubmission } from '../utils/storage';
 import { generateSubmissionWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { readFileAsDataURL } from '../utils/fileHelper';
 import { uploadRawFileToCloudStorage } from '../utils/cloudStorage';
-import { getGoogleAppsScriptUrl, uploadFileToGoogleDriveViaScript } from '../utils/googleAppsScript';
+import { getGoogleAppsScriptUrl, uploadFileToGoogleDriveViaScript, sendSubmissionToGoogleSheetViaScript } from '../utils/googleAppsScript';
 import { saveFileInChunks } from '../utils/chunkedStorage';
 import { 
   requestGoogleDriveAccess, 
@@ -366,6 +366,29 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
         files: allFiles,
         checklistConfirmed: checkedRequirements
       });
+
+      // 5. AUTO-SYNC: Kirim data identitas pemohon ke Google Sheets Kantor (jika Webhook dikonfigurasi)
+      if (gasUrl) {
+        const driveLinks = allFiles
+          .filter(f => f.googleDriveViewUrl)
+          .map(f => `${f.fileName}: ${f.googleDriveViewUrl}`);
+
+        sendSubmissionToGoogleSheetViaScript(gasUrl, {
+          id: submissionId,
+          serviceTitle: service.title,
+          applicantName,
+          phone,
+          email: formData['email'],
+          district,
+          address,
+          institutionName,
+          status: 'SUBMITTED',
+          submittedAt: new Date().toISOString(),
+          filesCount: allFiles.length,
+          fileUrls: driveLinks,
+          formData
+        }).catch(sheetErr => console.warn('Google Sheet auto-record notice:', sheetErr));
+      }
 
       setIsSubmitting(false);
       setUploadProgressText('');
