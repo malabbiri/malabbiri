@@ -250,10 +250,10 @@ export const GoogleDriveIntegrationModal: React.FC<GoogleDriveIntegrationModalPr
                 </div>
                 <h5 className="font-bold text-xs text-white">Deploy sebagai Web App</h5>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Klik <strong>Deploy</strong> &gt; <strong>New deployment</strong>. Pilih tipe <strong>Web app</strong>. Atur:
+                  Klik <strong>Deploy</strong> &gt; <strong>New deployment</strong> (atau <em>Manage deployments &gt; Edit &gt; New version</em> jika update skrip). Atur:
                   <br />• Execute as: <strong>Me</strong>
                   <br />• Who has access: <strong>Anyone</strong>
-                  <br />Klik Deploy &amp; salin URL-nya ke kotak di atas!
+                  <br />Klik Deploy &amp; salin URL Web App ke kotak di atas!
                 </p>
               </div>
             </div>

@@ -28,7 +28,8 @@ import {
   UserPlus,
   Trash2,
   Printer,
-  Cloud
+  Cloud,
+  FileSpreadsheet
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { formatIndoDate } from '../utils/date';
@@ -36,7 +37,7 @@ import { updateSubmissionStatus, clearAllSubmissions, deleteSubmission } from '.
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
-import { getGoogleAppsScriptUrl } from '../utils/googleAppsScript';
+import { getGoogleAppsScriptUrl, sendSubmissionToGoogleSheetViaScript } from '../utils/googleAppsScript';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';
 
@@ -162,6 +163,87 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       deleteOfficerAccount(nip);
       setOfficersList(getStoredOfficers());
     }
+  };
+
+  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
+
+  const handleSyncSingleToGoogleSheet = async (sub: SubmissionRecord) => {
+    const gasUrl = await getGoogleAppsScriptUrl();
+    if (!gasUrl) {
+      setIsGoogleDriveModalOpen(true);
+      alert('URL Webhook Google Drive & Sheet belum dikonfigurasi. Silakan simpan URL Webhook Anda terlebih dahulu.');
+      return;
+    }
+
+    const driveLinks = (sub.files || [])
+      .filter(f => f.googleDriveViewUrl)
+      .map(f => `${f.fileName}: ${f.googleDriveViewUrl}`);
+
+    const res = await sendSubmissionToGoogleSheetViaScript(gasUrl, {
+      id: sub.id,
+      serviceTitle: sub.serviceTitle,
+      applicantName: sub.applicantName,
+      phone: sub.phone || '',
+      email: sub.email,
+      district: sub.district,
+      address: sub.address || '',
+      institutionName: sub.institutionName,
+      status: sub.status,
+      submittedAt: sub.submittedAt,
+      filesCount: (sub.files || []).length,
+      fileUrls: driveLinks,
+      formData: sub.formData
+    });
+
+    if (res.success) {
+      alert(`Berhasil! Data permohonan ${sub.id} (${sub.applicantName}) telah dikirim ke Google Sheets kantor.`);
+    } else {
+      alert(`Gagal mengirim ke Google Sheets: ${res.message}. Pastikan Webhook Apps Script sudah di-deploy dengan versi baru.`);
+    }
+  };
+
+  const handleSyncAllToGoogleSheet = async () => {
+    const gasUrl = await getGoogleAppsScriptUrl();
+    if (!gasUrl) {
+      setIsGoogleDriveModalOpen(true);
+      alert('URL Webhook Google Drive & Sheet belum dikonfigurasi. Silakan simpan URL Webhook Anda terlebih dahulu.');
+      return;
+    }
+
+    if (submissions.length === 0) {
+      alert('Belum ada data permohonan untuk dikirim.');
+      return;
+    }
+
+    setIsSyncingSheet(true);
+    let successCount = 0;
+
+    for (const sub of submissions) {
+      const driveLinks = (sub.files || [])
+        .filter(f => f.googleDriveViewUrl)
+        .map(f => `${f.fileName}: ${f.googleDriveViewUrl}`);
+
+      const res = await sendSubmissionToGoogleSheetViaScript(gasUrl, {
+        id: sub.id,
+        serviceTitle: sub.serviceTitle,
+        applicantName: sub.applicantName,
+        phone: sub.phone || '',
+        email: sub.email,
+        district: sub.district,
+        address: sub.address || '',
+        institutionName: sub.institutionName,
+        status: sub.status,
+        submittedAt: sub.submittedAt,
+        filesCount: (sub.files || []).length,
+        fileUrls: driveLinks,
+        formData: sub.formData
+      });
+
+      if (res.success) successCount++;
+    }
+
+    setIsSyncingSheet(false);
+    alert(`Selesai! Sebanyak ${successCount} dari ${submissions.length} data permohonan berhasil dikirim ke Google Sheets kantor.`);
   };
 
   const handlePurgeAllSubmissions = async () => {
@@ -331,6 +413,16 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             ) : (
               <span className="px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 text-[9px] font-bold">Setel</span>
             )}
+          </button>
+
+          <button
+            onClick={handleSyncAllToGoogleSheet}
+            disabled={isSyncingSheet || submissions.length === 0}
+            className="px-3.5 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-200 hover:text-white border border-teal-400/40 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+            title="Kirim dan Perbarui Seluruh Data Permohonan ke Google Sheets Kantor"
+          >
+            <FileSpreadsheet className={`w-4 h-4 text-teal-300 ${isSyncingSheet ? 'animate-spin' : ''}`} />
+            <span>{isSyncingSheet ? 'Merekam ke Sheet...' : 'Sinkron ke Sheets'}</span>
           </button>
 
           <button
@@ -600,6 +692,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     >
                       <FolderDown className="w-3.5 h-3.5" />
                       <span>Periksa & Unduh Berkas</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleSyncSingleToGoogleSheet(sub)}
+                      className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/20 inline-flex items-center transition-colors cursor-pointer"
+                      title="Kirim / Sinkronkan Data Permohonan Ini ke Google Sheets Kantor"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
                     </button>
 
                     <button

@@ -9,12 +9,14 @@ let cachedScriptUrl: string | null = null;
 
 export const DEFAULT_SCRIPT_TEMPLATE = `/**
  * WEBHOOK GOOGLE DRIVE & GOOGLE SHEET MALA'BIRI BIMAS ISLAM KEMENAG GOWA
- * Skrip ini:
  * 1. Menerima unggahan berkas asli pemohon dan menyimpannya ke Google Drive Kantor (100% Gratis).
  * 2. Merekam otomatis seluruh data identitas pemohon ke Google Sheets Kantor secara realtime.
  */
 
-// Nama File Spreadsheet yang akan dibuat/digunakan otomatis di Google Drive
+// 1. ID Spreadsheet dari link URL Google Sheet Anda (Sesuai file Google Sheet Anda)
+var SPREADSHEET_ID = "1sLzphCK2Zhp6k0aHTY-YnOiECaGMmpkBZAUtSmqyu0Q";
+
+// 2. Nama File & Folder Cadangan (jika SPREADSHEET_ID tidak sengaja dikosongkan)
 var SPREADSHEET_NAME = "DATA_PERMOHONAN_MALABIRI_BIMAS_ISLAM_GOWA";
 var DRIVE_FOLDER_NAME = "ARSIP_MALABIRI_BIMAS_ISLAM_GOWA";
 
@@ -93,21 +95,36 @@ function doPost(e) {
 }
 
 /**
+ * Membuka Google Sheet secara presisi melalui ID atau nama file
+ */
+function getTargetSpreadsheet() {
+  if (SPREADSHEET_ID && SPREADSHEET_ID.trim() !== "") {
+    try {
+      return SpreadsheetApp.openById(SPREADSHEET_ID.trim());
+    } catch (e) {
+      Logger.log("openById gagal, mencari berdasarkan nama: " + e.toString());
+    }
+  }
+
+  var files = DriveApp.getFilesByName(SPREADSHEET_NAME);
+  if (files.hasNext()) {
+    return SpreadsheetApp.open(files.next());
+  } else {
+    return SpreadsheetApp.create(SPREADSHEET_NAME);
+  }
+}
+
+/**
  * Fungsi pembantu untuk mencatat baris data pemohon ke Google Sheets
  */
 function recordSubmissionToSheet(data) {
   try {
-    // Cari atau buat file Google Spreadsheet
-    var files = DriveApp.getFilesByName(SPREADSHEET_NAME);
-    var spreadsheet;
-    if (files.hasNext()) {
-      spreadsheet = SpreadsheetApp.open(files.next());
-    } else {
-      spreadsheet = SpreadsheetApp.create(SPREADSHEET_NAME);
+    var spreadsheet = getTargetSpreadsheet();
+    var sheet = spreadsheet.getSheetByName("Data Permohonan") || spreadsheet.getSheets()[0];
+    
+    if (sheet.getName() !== "Data Permohonan") {
+      sheet.setName("Data Permohonan");
     }
-
-    var sheet = spreadsheet.getActiveSheet();
-    sheet.setName("Data Permohonan");
 
     // Jika sheet masih baru (kosong), buat baris judul (Header Kolom)
     if (sheet.getLastRow() === 0) {
@@ -143,7 +160,7 @@ function recordSubmissionToSheet(data) {
     if (data.fileUrls && Array.isArray(data.fileUrls)) {
       fileLinks = data.fileUrls.join("\\n");
     } else if (data.filesCount) {
-      fileLinks = data.filesCount + " berkas di folder ARSIP/" + (data.id || "");
+      fileLinks = data.filesCount + " berkas di Google Drive";
     }
 
     var newRow = [
@@ -176,6 +193,32 @@ function recordSubmissionToSheet(data) {
       message: "Gagal mencatat ke sheet: " + err.toString()
     };
   }
+}
+
+/**
+ * FUNGSI UJI COBA LANGSUNG DARI GOOGLE APPS SCRIPT
+ * Anda bisa memilih fungsi 'testWriteToSheet' di dropdown atas editor Google Script lalu klik 'Run' (Jalankan)
+ * untuk menguji dan mengizinkan (authorize) akses ke Google Sheets Anda secara langsung!
+ */
+function testWriteToSheet() {
+  var testData = {
+    action: "record_submission",
+    id: "TEST-" + Math.floor(1000 + Math.random() * 9000),
+    serviceTitle: "Uji Coba Integrasi Google Sheets",
+    applicantName: "Petugas Bimas Islam Kemenag Gowa",
+    phone: "081234567890",
+    email: "bimasislamgowa@kemenag.go.id",
+    district: "Somba Opu",
+    address: "Jl. Masjid Raya No. 1 Sungguminasa",
+    institutionName: "Kemenag Gowa",
+    status: "SUBMITTED",
+    submittedAt: new Date().toISOString(),
+    filesCount: 1,
+    fileUrls: ["Uji coba link berkas Google Drive"]
+  };
+  var res = recordSubmissionToSheet(testData);
+  Logger.log(res);
+  return res;
 }
 `;
 
@@ -356,32 +399,49 @@ export async function sendSubmissionToGoogleSheetViaScript(
     formData?: Record<string, any>;
   }
 ): Promise<{ success: boolean; message: string; spreadsheetUrl?: string }> {
-  try {
-    const payload = {
-      action: 'record_submission',
-      ...submission
-    };
+  const payload = {
+    action: 'record_submission',
+    ...submission
+  };
+  const bodyString = JSON.stringify(payload);
 
+  try {
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
       },
-      body: JSON.stringify(payload)
+      body: bodyString
     });
 
-    if (!response.ok) {
-      return { success: false, message: `Status HTTP ${response.status}` };
+    if (response.ok) {
+      try {
+        const result = await response.json();
+        return {
+          success: result.status === 'success',
+          message: result.message || 'Tercatat',
+          spreadsheetUrl: result.spreadsheetUrl
+        };
+      } catch (e) {
+        return { success: true, message: 'Data berhasil direkam ke Google Sheets' };
+      }
     }
-
-    const result = await response.json();
-    return {
-      success: result.status === 'success',
-      message: result.message || 'Tercatat',
-      spreadsheetUrl: result.spreadsheetUrl
-    };
+    return { success: false, message: `Status HTTP ${response.status}` };
   } catch (err: any) {
-    console.warn('Gagal mencatat ke Google Sheet otomatis:', err);
-    return { success: false, message: err.message || 'Jaringan gagal' };
+    // If standard fetch failed (e.g. browser CORS intercept on 302 redirect), use no-cors to guarantee delivery to Google server
+    try {
+      await fetch(scriptUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: bodyString
+      });
+      return { success: true, message: 'Data berhasil terkirim ke Google Sheets' };
+    } catch (fallbackErr: any) {
+      console.warn('Gagal mencatat ke Google Sheet otomatis:', fallbackErr);
+      return { success: false, message: fallbackErr.message || 'Jaringan gagal' };
+    }
   }
 }

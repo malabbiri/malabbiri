@@ -369,25 +369,30 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
 
       // 5. AUTO-SYNC: Kirim data identitas pemohon ke Google Sheets Kantor (jika Webhook dikonfigurasi)
       if (gasUrl) {
+        setUploadProgressText('Merekam data pemohon ke Google Sheets Kantor...');
         const driveLinks = allFiles
           .filter(f => f.googleDriveViewUrl)
           .map(f => `${f.fileName}: ${f.googleDriveViewUrl}`);
 
-        sendSubmissionToGoogleSheetViaScript(gasUrl, {
-          id: submissionId,
-          serviceTitle: service.title,
-          applicantName,
-          phone,
-          email: formData['email'],
-          district,
-          address,
-          institutionName,
-          status: 'SUBMITTED',
-          submittedAt: new Date().toISOString(),
-          filesCount: allFiles.length,
-          fileUrls: driveLinks,
-          formData
-        }).catch(sheetErr => console.warn('Google Sheet auto-record notice:', sheetErr));
+        try {
+          await sendSubmissionToGoogleSheetViaScript(gasUrl, {
+            id: submissionId,
+            serviceTitle: service.title,
+            applicantName,
+            phone,
+            email: formData['email'],
+            district,
+            address,
+            institutionName,
+            status: 'SUBMITTED',
+            submittedAt: new Date().toISOString(),
+            filesCount: allFiles.length,
+            fileUrls: driveLinks,
+            formData
+          });
+        } catch (sheetErr) {
+          console.warn('Google Sheet auto-record notice:', sheetErr);
+        }
       }
 
       setIsSubmitting(false);
