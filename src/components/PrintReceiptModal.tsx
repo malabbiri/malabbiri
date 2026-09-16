@@ -21,12 +21,21 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
     };
   }, []);
 
+  const [isDownloading, setIsDownloading] = React.useState(false);
+
   const handlePrint = () => {
     window.print();
   };
 
-  const handleDownloadPdf = () => {
-    downloadOfficialReceiptPdf(submission);
+  const handleDownloadPdf = async () => {
+    try {
+      setIsDownloading(true);
+      await downloadOfficialReceiptPdf(submission);
+    } catch (err) {
+      console.error('Error generating receipt PDF:', err);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const now = new Date();
@@ -52,11 +61,12 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
             <button
               type="button"
               onClick={handleDownloadPdf}
-              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow cursor-pointer"
+              disabled={isDownloading}
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow cursor-pointer disabled:opacity-60"
               title="Unduh file PDF resmi tanda terima pendaftaran"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Unduh PDF Resmi</span>
+              <Download className={`w-3.5 h-3.5 ${isDownloading ? 'animate-bounce' : ''}`} />
+              <span>{isDownloading ? 'Menyiapkan PDF...' : 'Unduh PDF Resmi'}</span>
             </button>
             <button
               type="button"

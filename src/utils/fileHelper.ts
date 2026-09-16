@@ -642,10 +642,52 @@ export function downloadAllFilesBatch(files: UploadedFileInfo[], submissionId: s
 }
 
 /**
+ * Loads the official Kemenag logo as a high-resolution PNG data URL
+ * so it can be reliably embedded into jsPDF documents.
+ */
+let cachedKemenagPngDataUrl: string | null = null;
+
+export async function getKemenagLogoDataUrl(): Promise<string | null> {
+  if (cachedKemenagPngDataUrl) return cachedKemenagPngDataUrl;
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return await new Promise<string | null>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 400;
+          canvas.height = 380;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, 400, 380);
+            cachedKemenagPngDataUrl = canvas.toDataURL('image/png');
+            resolve(cachedKemenagPngDataUrl);
+            return;
+          }
+        } catch (e) {
+          console.warn('Canvas conversion failed:', e);
+        }
+        resolve(null);
+      };
+      img.onerror = () => {
+        resolve(null);
+      };
+      img.src = '/logokemenag.svg';
+    });
+  } catch (err) {
+    console.warn('Could not load kemenag logo:', err);
+    return null;
+  }
+}
+
+/**
  * Generates and downloads the official, high-resolution 1-page A4 PDF of Tanda Terima Pendaftaran
  * with Kop Surat Kemenag Gowa, structured data table, digital stamp, and verification code.
  */
-export function downloadOfficialReceiptPdf(submission: SubmissionRecord): void {
+export async function downloadOfficialReceiptPdf(submission: SubmissionRecord): Promise<void> {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -657,21 +699,32 @@ export function downloadOfficialReceiptPdf(submission: SubmissionRecord): void {
   const rightMargin = 190;
   const contentWidth = rightMargin - leftMargin;
 
-  // 1. Official Letterhead Header
+  // 1. Official Letterhead Header - Render Logo Kemenag RI
+  try {
+    const logoDataUrl = await getKemenagLogoDataUrl();
+    if (logoDataUrl) {
+      // Embed Kemenag logo at left side of Kop Surat (x: 20mm, y: 15mm, w: 22mm, h: 21mm)
+      doc.addImage(logoDataUrl, 'PNG', 20, 15, 22, 21);
+    }
+  } catch (imgErr) {
+    console.warn('Failed to embed logo in PDF:', imgErr);
+  }
+
+  // Official Letterhead Typography
   doc.setFont('times', 'normal');
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
-  doc.text('KEMENTERIAN AGAMA REPUBLIK INDONESIA', pageWidth / 2, 20, { align: 'center' });
+  doc.text('KEMENTERIAN AGAMA REPUBLIK INDONESIA', 112, 20, { align: 'center' });
 
   doc.setFont('times', 'bold');
   doc.setFontSize(12.5);
-  doc.text('KANTOR KEMENTERIAN AGAMA KABUPATEN GOWA', pageWidth / 2, 26, { align: 'center' });
+  doc.text('KANTOR KEMENTERIAN AGAMA KABUPATEN GOWA', 112, 26, { align: 'center' });
 
   doc.setFont('times', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(51, 65, 85);
-  doc.text('Jalan H. Agussalim No. 3 Sungguminasa, 92111 Telp (0411) 865195, Fax (0411) 867354', pageWidth / 2, 31.5, { align: 'center' });
-  doc.text('Pos-el: kab.gowa@kemenag.go.id   Laman: https://gowa.kemenag.go.id/', pageWidth / 2, 35.5, { align: 'center' });
+  doc.text('Jalan H. Agussalim No. 3 Sungguminasa, 92111 Telp (0411) 865195, Fax (0411) 867354', 112, 31.5, { align: 'center' });
+  doc.text('Pos-el: kab.gowa@kemenag.go.id   Laman: https://gowa.kemenag.go.id/', 112, 35.5, { align: 'center' });
 
   // Letterhead double divider lines
   doc.setDrawColor(15, 23, 42);

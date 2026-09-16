@@ -46,6 +46,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     submissionId: string;
     applicantName: string;
   } | null>(null);
+  const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false);
 
   useEffect(() => {
     if (initialQuery) {
@@ -228,12 +229,22 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
             {/* Quick Actions */}
             <div className="flex flex-wrap items-center gap-2.5">
               <button
-                onClick={() => downloadOfficialReceiptPdf(activeSubmission)}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+                onClick={async () => {
+                  try {
+                    setIsDownloadingReceipt(true);
+                    await downloadOfficialReceiptPdf(activeSubmission);
+                  } catch (err) {
+                    console.error('Download receipt error:', err);
+                  } finally {
+                    setIsDownloadingReceipt(false);
+                  }
+                }}
+                disabled={isDownloadingReceipt}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-60"
                 title="Unduh Lembar Tanda Terima Pendaftaran dalam format PDF Resmi"
               >
-                <Download className="w-4 h-4" />
-                <span>Unduh PDF Tanda Terima</span>
+                <Download className={`w-4 h-4 ${isDownloadingReceipt ? 'animate-bounce' : ''}`} />
+                <span>{isDownloadingReceipt ? 'Menyiapkan PDF...' : 'Unduh PDF Tanda Terima'}</span>
               </button>
 
               <button
