@@ -88,11 +88,11 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
             <OfficialLetterhead />
 
             {/* Document Title */}
-            <div className="text-center py-2">
-              <h2 className="text-sm font-bold uppercase tracking-wider underline font-sans text-slate-950">
+            <div className="text-center pt-3 pb-1">
+              <h2 className="text-sm sm:text-base font-bold uppercase tracking-wider font-sans text-slate-950 inline-block border-b-2 border-slate-900 pb-0.5">
                 TANDA TERIMA PENDAFTARAN LAYANAN MALA'BIRI
               </h2>
-              <p className="text-[11px] text-slate-700 font-mono mt-0.5">
+              <p className="text-[11px] text-slate-700 font-mono mt-1.5">
                 Nomor Registrasi: <strong>{submission.id}</strong>
               </p>
             </div>
