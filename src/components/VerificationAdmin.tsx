@@ -488,31 +488,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
       </div>
 
-      {/* Storage Location & Download Information Card */}
-      <div className="glass-panel p-4 sm:p-5 rounded-2xl border-white/20 bg-gradient-to-r from-white/[0.08] via-emerald-950/30 to-white/[0.05] shadow-lg">
-        <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 flex-shrink-0 mt-0.5">
-            <Database className="w-5 h-5 text-emerald-400" />
-          </div>
-          <div className="space-y-1.5 flex-1 text-xs">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <h4 className="font-bold text-white text-sm flex items-center gap-2">
-                <span>Pusat Arsip & Penyimpanan Berkas Digital Masyarakat</span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-mono">
-                  Basis Data Terverifikasi
-                </span>
-              </h4>
-            </div>
-            <p className="text-slate-200 leading-relaxed">
-              <strong className="text-white">Lokasi Penyimpanan:</strong> Dokumen yang diunggah oleh masyarakat tersimpan secara digital dan terenkripsi pada <em>Basis Data Digital MALA'BIRI</em> serta otomatis terarsip ke <strong className="text-emerald-300">Google Drive & Google Sheets Kantor</strong> (pada file spreadsheet <code>DATA_PERMOHONAN_MALABIRI_BIMAS_ISLAM_GOWA</code>).
-            </p>
-            <p className="text-slate-200 leading-relaxed">
-              <strong className="text-white">Cara Mengunduh Berkas:</strong> Verifikator dapat menekan tombol <strong className="text-emerald-300">"Periksa & Unduh Berkas"</strong> pada baris pemohon di tabel bawah. Pada jendela verifikasi, Anda dapat melakukan <span className="underline decoration-emerald-400">Pratinjau visual (Preview)</span> langsung, mengunduh file asli per dokumen, atau menekan tombol <strong className="text-white">"Unduh Semua Berkas Sekaligus"</strong> untuk menyimpan seluruh lampiran ke komputer.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="glass-panel p-4 rounded-2xl border-white/15">
