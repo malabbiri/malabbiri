@@ -32,8 +32,6 @@ import {
 import { 
   PrintReceiptModal 
 } from './components/PrintReceiptModal';
-import { IntroScreen } from './components/IntroScreen';
-import { AnimatePresence } from 'motion/react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { 
   ServiceDefinition, 
@@ -58,15 +56,6 @@ import { MessageCircle } from 'lucide-react';
 import { APP_INFO } from './data/services';
 
 export default function App() {
-  const [showIntro, setShowIntro] = useState<boolean>(() => {
-    // Show intro on first session load
-    try {
-      const visited = sessionStorage.getItem('malabbiri_intro_seen');
-      return !visited;
-    } catch (e) {
-      return true;
-    }
-  });
   const [activeTab, setActiveTab] = useState<'services' | 'tracking' | 'verification' | 'stats' | 'survey'>('services');
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
   const [surveys, setSurveys] = useState<SurveyRecord[]>([]);
@@ -128,31 +117,11 @@ export default function App() {
     showToast('Terima kasih! Evaluasi survey IKM Anda telah tercatat.');
   };
 
-  const handleIntroComplete = () => {
-    try {
-      sessionStorage.setItem('malabbiri_intro_seen', 'true');
-    } catch (e) {
-      // ignore
-    }
-    setShowIntro(false);
-  };
-
-  const handleReplayIntro = () => {
-    setShowIntro(true);
-  };
-
   const pendingCount = submissions.filter(s => s.status === 'SUBMITTED' || s.status === 'VERIFYING').length;
   const approvedCount = submissions.filter(s => s.status === 'APPROVED').length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-emerald-500 selection:text-white relative">
-      {/* Cool Interactive Intro Showcase */}
-      <AnimatePresence>
-        {showIntro && (
-          <IntroScreen onComplete={handleIntroComplete} />
-        )}
-      </AnimatePresence>
-
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-24 right-6 z-50 p-4 rounded-xl bg-white border border-emerald-300 text-slate-800 text-xs font-semibold shadow-lg flex items-center gap-3 animate-in slide-in-from-top duration-300">
@@ -167,7 +136,6 @@ export default function App() {
         setActiveTab={setActiveTab}
         pendingVerificationCount={pendingCount}
         isOfficerLoggedIn={!!officerSession?.isLoggedIn}
-        onShowIntro={handleReplayIntro}
       />
 
       {/* Main Content Area */}
