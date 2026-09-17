@@ -670,14 +670,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     </button>
 
                     <button
-                      onClick={() => handleSyncSingleToGoogleSheet(sub)}
-                      className="p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 text-white border border-emerald-400/40 inline-flex items-center transition-colors cursor-pointer"
-                      title="Kirim / Sinkronkan Data Permohonan Ini ke Google Sheets Kantor"
-                    >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
-                    </button>
-
-                    <button
                       onClick={() => onOpenReceipt(sub)}
                       className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 inline-flex items-center transition-colors cursor-pointer"
                       title="Cetak Tanda Terima (Kop Resmi Kemenag Gowa)"
