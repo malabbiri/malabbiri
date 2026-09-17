@@ -419,99 +419,99 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl glass-modal rounded-3xl overflow-hidden border border-white/20 shadow-2xl my-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-6 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="relative w-full max-w-3xl bg-white rounded-xl overflow-hidden border border-slate-200 shadow-xl my-6">
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-emerald-950/60 to-cyan-950/60 px-6 py-5 border-b border-white/10 flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              <Sparkles className="w-3 h-3 text-emerald-400" />
+        <div className="bg-emerald-700 px-6 py-4 flex items-start justify-between gap-4">
+          <div className="space-y-0.5">
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-800 text-emerald-100">
+              <Sparkles className="w-3 h-3 text-emerald-300" />
               <span>Formulir Permohonan Online</span>
             </div>
-            <h3 className="text-lg sm:text-xl font-bold text-white leading-tight">
+            <h3 className="text-base sm:text-lg font-bold text-white leading-snug">
               {service.title}
             </h3>
-            <p className="text-xs text-slate-300">
+            <p className="text-[11px] text-emerald-100">
               Seksi Bimbingan Masyarakat Islam Kantor Kementerian Agama Kab. Gowa
             </p>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 max-h-[75vh] overflow-y-auto space-y-6">
+        <div className="p-6 max-h-[75vh] overflow-y-auto space-y-6 bg-slate-50">
           {completedSubmission ? (
             /* SUCCESS VIEW */
-            <div className="text-center py-6 space-y-6 animate-in zoom-in-95 duration-300">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                <CheckCircle2 className="w-10 h-10" />
+            <div className="text-center py-6 space-y-5 animate-in zoom-in-95 duration-300">
+              <div className="w-14 h-14 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-8 h-8" />
               </div>
 
-              <div className="space-y-2 max-w-md mx-auto">
-                <h4 className="text-2xl font-extrabold text-white">
+              <div className="space-y-1 max-w-md mx-auto">
+                <h4 className="text-xl font-bold text-slate-900">
                   Permohonan Berhasil Dikirim!
                 </h4>
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <p className="text-xs text-slate-600 leading-relaxed">
                   Berkas Anda telah diterima oleh sistem MALA'BIRI dan segera diverifikasi oleh petugas Bimas Islam Kemenag Kabupaten Gowa.
                 </p>
               </div>
 
               {/* Ticket Card */}
-              <div className="glass-panel p-5 rounded-2xl border-emerald-500/30 max-w-md mx-auto text-left space-y-3">
-                <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                  <span className="text-xs text-slate-400">Nomor Registrasi Tiket:</span>
-                  <span className="text-base font-mono font-extrabold text-emerald-300 bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-500/30">
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm max-w-md mx-auto text-left space-y-3">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span className="text-xs text-slate-500">Nomor Registrasi Tiket:</span>
+                  <span className="text-sm font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
                     {completedSubmission.id}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span className="text-slate-400 block">Nama Pemohon:</span>
-                    <strong className="text-white font-semibold">{completedSubmission.applicantName}</strong>
+                    <span className="text-slate-500 block">Nama Pemohon:</span>
+                    <strong className="text-slate-800 font-semibold">{completedSubmission.applicantName}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">No. HP/WA:</span>
-                    <strong className="text-white font-semibold">{completedSubmission.phone}</strong>
+                    <span className="text-slate-500 block">No. HP/WA:</span>
+                    <strong className="text-slate-800 font-semibold">{completedSubmission.phone}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Status:</span>
-                    <span className="inline-block text-[11px] font-bold text-cyan-300 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-500/30">
+                    <span className="text-slate-500 block">Status:</span>
+                    <span className="inline-block text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                       Menunggu Verifikasi
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Kode Verifikasi:</span>
-                    <span className="font-mono text-emerald-400 font-bold">{completedSubmission.verificationCode}</span>
+                    <span className="text-slate-500 block">Kode Verifikasi:</span>
+                    <span className="font-mono text-emerald-700 font-bold">{completedSubmission.verificationCode}</span>
                   </div>
                 </div>
 
                 {/* Cloud & Files Status */}
                 {completedSubmission.files && completedSubmission.files.length > 0 && (
-                  <div className="pt-2 border-t border-white/10 space-y-1.5">
-                    <span className="text-[11px] text-slate-400 block font-medium">Berkas yang Diserahkan:</span>
+                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                    <span className="text-[11px] text-slate-500 block font-medium">Berkas yang Diserahkan:</span>
                     <div className="space-y-1">
                       {completedSubmission.files.map((file, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-xs bg-slate-900/60 p-2 rounded-lg border border-white/5">
-                          <span className="truncate max-w-[200px] text-slate-300">{file.fileName}</span>
+                        <div key={idx} className="flex items-center justify-between text-xs bg-slate-50 p-2 rounded-lg border border-slate-200">
+                          <span className="truncate max-w-[200px] text-slate-700">{file.fileName}</span>
                           {file.googleDriveViewUrl ? (
                             <a 
                               href={file.googleDriveViewUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold"
+                              className="text-[11px] text-emerald-700 hover:text-emerald-800 flex items-center gap-1 font-semibold"
                             >
                               <Cloud className="w-3 h-3" />
                               <span>Google Drive</span>
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           ) : (
-                            <span className="text-[10px] text-slate-400">Tersimpan</span>
+                            <span className="text-[10px] text-slate-500">Tersimpan</span>
                           )}
                         </div>
                       ))}
@@ -521,13 +521,13 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
                 <button
                   onClick={() => {
                     const msg = generateSubmissionWAMessage(completedSubmission);
                     openWhatsAppChat(completedSubmission.phone, msg);
                   }}
-                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4 fill-current" />
                   <span>Kirim Bukti Registrasi ke WhatsApp</span>
@@ -535,17 +535,17 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
 
                 <button
                   onClick={() => onOpenReceipt(completedSubmission)}
-                  className="w-full sm:w-auto px-5 py-3 rounded-xl glass-panel text-slate-200 hover:text-white font-semibold text-xs flex items-center justify-center gap-2 border-white/20 hover:bg-white/10"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-white text-slate-700 hover:bg-slate-100 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-200 shadow-sm transition-colors cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-cyan-300" />
+                  <Printer className="w-4 h-4 text-slate-600" />
                   <span>Cetak Lembar Tanda Terima</span>
                 </button>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   onClick={onClose}
-                  className="text-xs text-slate-400 hover:text-white underline"
+                  className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
                 >
                   Tutup dan Kembali ke Beranda
                 </button>
@@ -553,30 +553,30 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
             </div>
           ) : (
             /* FORM INPUT VIEW */
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* Notice or Regulation Banner */}
               {service.notice && (
-                <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-500/30 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-200 leading-relaxed">
+                <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 leading-relaxed">
                     {service.notice}
                   </p>
                 </div>
               )}
 
               {service.legalBasis && (
-                <div className="p-3.5 rounded-xl bg-cyan-950/40 border border-cyan-500/20 flex items-center gap-2.5 text-xs text-cyan-300">
-                  <Info className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-xs text-emerald-800">
+                  <Info className="w-4 h-4 text-emerald-700 flex-shrink-0" />
                   <span>Dasar Hukum: <strong>{service.legalBasis}</strong></span>
                 </div>
               )}
 
               {/* PMA 29/2019 Requirements Checklist (Specific to Service 1) */}
               {service.requirementsChecklist && service.requirementsChecklist.length > 0 && (
-                <div className="glass-panel p-4 rounded-2xl border-emerald-500/25 space-y-3">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700" />
                       Dokumen Yang Tersedia (Mohon Dicentang)
                     </span>
                     <button
@@ -588,34 +588,34 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                           setCheckedRequirements([...service.requirementsChecklist!]);
                         }
                       }}
-                      className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold"
+                      className="text-[11px] text-emerald-700 hover:text-emerald-800 font-semibold cursor-pointer"
                     >
                       {checkedRequirements.length === service.requirementsChecklist?.length ? 'Batal Semua' : 'Centang Semua'}
                     </button>
                   </div>
 
-                  <p className="text-[11px] text-slate-300">
+                  <p className="text-[11px] text-slate-500">
                     Sesuai Peraturan Menteri Agama No. 29 Tahun 2019, pastikan Anda telah menyiapkan berkas fisik atau scan berikut:
                   </p>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {service.requirementsChecklist.map((item, idx) => {
                       const isChecked = checkedRequirements.includes(item);
                       return (
                         <div
                           key={idx}
                           onClick={() => toggleChecklist(item)}
-                          className={`flex items-start gap-3 p-2.5 rounded-xl cursor-pointer border transition-all text-xs ${
+                          className={`flex items-start gap-2.5 p-2 rounded-lg cursor-pointer border transition-colors text-xs ${
                             isChecked
-                              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                              : 'bg-white/[0.03] border-white/10 text-slate-300 hover:bg-white/[0.06]'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                           }`}
                         >
                           <div className="mt-0.5">
                             {isChecked ? (
-                              <CheckSquare className="w-4 h-4 text-emerald-400" />
+                              <CheckSquare className="w-4 h-4 text-emerald-700" />
                             ) : (
-                              <Square className="w-4 h-4 text-slate-500" />
+                              <Square className="w-4 h-4 text-slate-400" />
                             )}
                           </div>
                           <span className="leading-snug">{item}</span>
@@ -625,7 +625,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   </div>
 
                   {formErrors['checklist'] && (
-                    <p className="text-xs text-rose-400 font-medium">{formErrors['checklist']}</p>
+                    <p className="text-xs text-rose-600 font-medium">{formErrors['checklist']}</p>
                   )}
                 </div>
               )}
@@ -642,22 +642,22 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                     const maxSize = field.maxSizeMB || 10;
 
                     return (
-                      <div key={field.id} className="md:col-span-2 space-y-1.5 glass-panel p-4 rounded-2xl border-white/15">
-                        <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                      <div key={field.id} className="md:col-span-2 space-y-1.5 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
                           <span>
-                            {field.label} {field.required && <span className="text-rose-400">*</span>}
+                            {field.label} {field.required && <span className="text-rose-500">*</span>}
                           </span>
-                          <span className="text-[11px] font-normal text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-500/30">
+                          <span className="text-[11px] font-normal text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                             Maks {maxSize} MB {maxCount > 1 ? `(${maxCount} file)` : ''}
                           </span>
                         </label>
 
                         {field.helperText && (
-                          <p className="text-[11px] text-slate-400">{field.helperText}</p>
+                          <p className="text-[11px] text-slate-500">{field.helperText}</p>
                         )}
 
                         {/* File Dropzone */}
-                        <div className="relative border-2 border-dashed border-white/20 hover:border-emerald-400/50 rounded-xl p-4 text-center bg-slate-900/40 transition-colors">
+                        <div className="relative border-2 border-dashed border-slate-300 hover:border-emerald-600 rounded-lg p-4 text-center bg-slate-50 transition-colors">
                           <input
                             type="file"
                             accept={field.acceptedFormats || '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx'}
@@ -665,12 +665,12 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                             onChange={(e) => handleFileUpload(field.id, field.label, maxSize, maxCount, e)}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                           />
-                          <div className="flex flex-col items-center justify-center space-y-1.5 pointer-events-none">
-                            <UploadCloud className="w-8 h-8 text-emerald-400" />
-                            <p className="text-xs font-semibold text-slate-200">
+                          <div className="flex flex-col items-center justify-center space-y-1 pointer-events-none">
+                            <UploadCloud className="w-7 h-7 text-emerald-700" />
+                            <p className="text-xs font-semibold text-slate-800">
                               Klik atau seret file ke sini untuk mengunggah
                             </p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] text-slate-500">
                               Format: PDF, Word, Excel, Gambar (JPG, PNG)
                             </p>
                           </div>
@@ -678,23 +678,23 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
 
                         {/* Uploaded File Badges */}
                         {currentFiles.length > 0 && (
-                          <div className="space-y-1.5 pt-2">
+                          <div className="space-y-1.5 pt-1.5">
                             {currentFiles.map((f, fIdx) => (
                               <div
                                 key={fIdx}
-                                className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-emerald-500/30 text-xs text-white"
+                                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800"
                               >
                                 <div className="flex items-center gap-2 truncate">
-                                  <FileText className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                  <FileText className="w-4 h-4 text-emerald-700 flex-shrink-0" />
                                   <span className="truncate font-medium">{f.fileName}</span>
-                                  <span className="text-[10px] text-slate-400 font-mono">
+                                  <span className="text-[10px] text-slate-500 font-mono">
                                     ({(f.fileSize / (1024 * 1024)).toFixed(2)} MB)
                                   </span>
                                 </div>
                                 <button
                                   type="button"
                                   onClick={() => removeFile(field.id, fIdx)}
-                                  className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                                  className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -704,7 +704,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                         )}
 
                         {error && (
-                          <p className="text-xs text-rose-400 font-medium">{error}</p>
+                          <p className="text-xs text-rose-600 font-medium">{error}</p>
                         )}
                       </div>
                     );
@@ -713,23 +713,23 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   if (field.type === 'select') {
                     return (
                       <div key={field.id} className={isFullWidth ? 'md:col-span-2 space-y-1' : 'space-y-1'}>
-                        <label className="text-xs font-semibold text-slate-200">
-                          {field.label} {field.required && <span className="text-rose-400">*</span>}
+                        <label className="text-xs font-semibold text-slate-800">
+                          {field.label} {field.required && <span className="text-rose-500">*</span>}
                         </label>
                         <select
                           value={formData[field.id] || ''}
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white"
+                          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
                         >
-                          <option value="" className="bg-slate-900 text-slate-400">-- Pilih Opsi --</option>
+                          <option value="" className="text-slate-400">-- Pilih Opsi --</option>
                           {field.options?.map((opt, optIdx) => (
-                            <option key={optIdx} value={opt} className="bg-slate-900 text-white">
+                            <option key={optIdx} value={opt} className="text-slate-800">
                               {opt}
                             </option>
                           ))}
                         </select>
-                        {field.helperText && <p className="text-[10px] text-slate-400">{field.helperText}</p>}
-                        {error && <p className="text-xs text-rose-400 font-medium">{error}</p>}
+                        {field.helperText && <p className="text-[10px] text-slate-500">{field.helperText}</p>}
+                        {error && <p className="text-xs text-rose-600 font-medium">{error}</p>}
                       </div>
                     );
                   }
@@ -737,69 +737,69 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   if (field.type === 'textarea') {
                     return (
                       <div key={field.id} className="md:col-span-2 space-y-1">
-                        <label className="text-xs font-semibold text-slate-200">
-                          {field.label} {field.required && <span className="text-rose-400">*</span>}
+                        <label className="text-xs font-semibold text-slate-800">
+                          {field.label} {field.required && <span className="text-rose-500">*</span>}
                         </label>
                         <textarea
                           rows={3}
                           value={formData[field.id] || ''}
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
                           placeholder={field.placeholder}
-                          className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white resize-none"
+                          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none"
                         />
-                        {field.helperText && <p className="text-[10px] text-slate-400">{field.helperText}</p>}
-                        {error && <p className="text-xs text-rose-400 font-medium">{error}</p>}
+                        {field.helperText && <p className="text-[10px] text-slate-500">{field.helperText}</p>}
+                        {error && <p className="text-xs text-rose-600 font-medium">{error}</p>}
                       </div>
                     );
                   }
 
                   return (
                     <div key={field.id} className={isFullWidth ? 'md:col-span-2 space-y-1' : 'space-y-1'}>
-                      <label className="text-xs font-semibold text-slate-200">
-                        {field.label} {field.required && <span className="text-rose-400">*</span>}
+                      <label className="text-xs font-semibold text-slate-800">
+                        {field.label} {field.required && <span className="text-rose-500">*</span>}
                       </label>
                       <input
                         type={field.type}
                         value={formData[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
                         placeholder={field.placeholder}
-                        className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white"
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
                       />
-                      {field.helperText && <p className="text-[10px] text-slate-400">{field.helperText}</p>}
-                      {error && <p className="text-xs text-rose-400 font-medium">{error}</p>}
+                      {field.helperText && <p className="text-[10px] text-slate-500">{field.helperText}</p>}
+                      {error && <p className="text-xs text-rose-600 font-medium">{error}</p>}
                     </div>
                   );
                 })}
               </div>
 
               {/* Bottom WhatsApp Auto-Notify Note */}
-              <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/20 flex items-center gap-3">
-                <MessageCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                <p className="text-xs text-emerald-200">
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2.5">
+                <MessageCircle className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                <p className="text-xs text-emerald-800">
                   Setelah submit, Anda akan mendapatkan <strong>Nomor Tiket Registrasi</strong> dan dapat langsung mengirimkan bukti permohonan ke WhatsApp pemohon atau hotline Bimas Islam Gowa.
                 </p>
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-white/10">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-200">
                 {uploadProgressText ? (
-                  <div className="flex items-center gap-2 text-xs text-emerald-400">
-                    <Cloud className="w-4 h-4 animate-bounce text-emerald-400" />
+                  <div className="flex items-center gap-2 text-xs text-emerald-700">
+                    <Cloud className="w-4 h-4 animate-bounce text-emerald-700" />
                     <span className="font-medium animate-pulse">{uploadProgressText}</span>
                   </div>
                 ) : (
-                  <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                    <Cloud className="w-3.5 h-3.5 text-cyan-400" />
+                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <Cloud className="w-3.5 h-3.5 text-slate-500" />
                     <span>Berkas disinkronkan otomatis ke Cloud / Google Drive</span>
                   </div>
                 )}
 
-                <div className="flex items-center justify-end gap-3">
+                <div className="flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={onClose}
                     disabled={isSubmitting}
-                    className="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white glass-panel disabled:opacity-50"
+                    className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-200 bg-slate-100 disabled:opacity-50 cursor-pointer"
                   >
                     Batal
                   </button>
@@ -807,16 +807,16 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="px-5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <>
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                         <span>{uploadProgressText || 'Memproses Permohonan...'}</span>
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4" />
+                        <Send className="w-3.5 h-3.5" />
                         <span>Kirim Permohonan Online</span>
                       </>
                     )}

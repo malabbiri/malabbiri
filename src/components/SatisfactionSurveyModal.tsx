@@ -93,67 +93,67 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
     : '5.0';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Title */}
-      <div className="text-center space-y-2 max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-          <Award className="w-3.5 h-3.5 text-emerald-400" />
+      <div className="text-center space-y-1.5 max-w-2xl mx-auto">
+        <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+          <Award className="w-3.5 h-3.5 text-emerald-600" />
           <span>Indeks Kepuasan Masyarakat (IKM)</span>
         </div>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
           Survey Kepuasan Layanan Bimas Islam
         </h2>
-        <p className="text-xs sm:text-sm text-slate-300">
+        <p className="text-xs sm:text-sm text-slate-600">
           Bantu kami menjaga kualitas pelayanan yang responsif, transparan, dan prima dengan memberikan penilaian pengalaman Anda.
         </p>
       </div>
 
       {/* Top IKM Score Card */}
-      <div className="glass-panel rounded-3xl p-6 sm:p-8 border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 via-cyan-950/40 to-emerald-950/40 shadow-2xl max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+      <div className="bg-white rounded-xl p-6 sm:p-7 border border-slate-200 shadow-sm max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-5">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-emerald-400 to-teal-300 text-slate-950 flex flex-col items-center justify-center font-extrabold shadow-[0_0_30px_rgba(16,185,129,0.35)]">
+          <div className="w-18 h-18 rounded-xl bg-emerald-700 text-white flex flex-col items-center justify-center font-extrabold shadow-sm">
             <span className="text-2xl sm:text-3xl leading-none">{avgOverall}</span>
-            <span className="text-[10px] uppercase tracking-wider font-bold">/ 5.0</span>
+            <span className="text-[10px] uppercase tracking-wider font-bold mt-0.5">/ 5.0</span>
           </div>
 
           <div className="space-y-1">
-            <div className="flex items-center gap-1 text-amber-400">
+            <div className="flex items-center gap-1 text-amber-500">
               {[1, 2, 3, 4, 5].map(star => (
                 <Star key={star} className="w-4 h-4 fill-current" />
               ))}
             </div>
-            <h4 className="text-base font-bold text-white">
+            <h4 className="text-base font-bold text-slate-900">
               Mutu Pelayanan: Sangat Memuaskan (A)
             </h4>
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-slate-500">
               Berdasarkan {surveys.length} responden masyarakat & pengurus lembaga se-Kabupaten Gowa.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-center">
-            <span className="block text-lg font-bold text-emerald-300">100%</span>
-            <span className="text-[10px] text-slate-400">Bebas Pungli</span>
+          <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-center">
+            <span className="block text-lg font-bold text-emerald-800">100%</span>
+            <span className="text-[10px] text-slate-600">Bebas Biaya</span>
           </div>
-          <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-center">
-            <span className="block text-lg font-bold text-cyan-300">&lt; 24 Jam</span>
-            <span className="text-[10px] text-slate-400">Respon Cepat</span>
+          <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-center">
+            <span className="block text-lg font-bold text-emerald-800">&lt; 24 Jam</span>
+            <span className="text-[10px] text-slate-600">Respon Cepat</span>
           </div>
         </div>
       </div>
 
       {/* Form and Testimonials Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Survey Form */}
-        <div className="lg:col-span-7 glass-panel p-6 sm:p-8 rounded-3xl border-white/20 shadow-2xl">
+        <div className="lg:col-span-7 bg-white p-6 sm:p-7 rounded-xl border border-slate-200 shadow-sm">
           {isSubmittedSuccess ? (
-            <div className="text-center py-10 space-y-4 animate-in zoom-in-95 duration-300">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_25px_rgba(16,185,129,0.3)]">
-                <CheckCircle2 className="w-10 h-10" />
+            <div className="text-center py-8 space-y-3">
+              <div className="w-14 h-14 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-white">Terima Kasih Atas Penilaian Anda!</h3>
-              <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
+              <h3 className="text-lg font-bold text-slate-900">Terima Kasih Atas Penilaian Anda!</h3>
+              <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
                 Ulasan dan evaluasi Anda sangat berharga bagi peningkatan mutu layanan Seksi Bimas Islam Kantor Kementerian Agama Kabupaten Gowa.
               </p>
               <button
@@ -162,19 +162,19 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
                   setApplicantName('');
                   setFeedback('');
                 }}
-                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs"
+                className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs cursor-pointer shadow-sm"
               >
                 Isi Survey Baru
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="border-b border-white/10 pb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-emerald-400" />
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-emerald-700" />
                   <span>Kuesioner Penilaian Layanan</span>
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   Lengkapi data singkat berikut untuk mengirimkan evaluasi
                 </p>
               </div>
@@ -182,8 +182,8 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
               {/* Name & Service Selection */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-200">
-                    Nama Anda / Perwakilan Lembaga: <span className="text-rose-400">*</span>
+                  <label className="text-xs font-semibold text-slate-800">
+                    Nama Anda / Lembaga: <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -191,21 +191,21 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
                     value={applicantName}
                     onChange={(e) => setApplicantName(e.target.value)}
                     placeholder="Contoh: Drs. H. Ahmad / MT Nurul Iman"
-                    className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white"
+                    className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-200">
+                  <label className="text-xs font-semibold text-slate-800">
                     Layanan yang Diterima:
                   </label>
                   <select
                     value={serviceTitle}
                     onChange={(e) => setServiceTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white truncate"
+                    className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white truncate"
                   >
                     {SERVICES_LIST.map(svc => (
-                      <option key={svc.id} value={svc.title} className="bg-slate-900">
+                      <option key={svc.id} value={svc.title}>
                         {svc.shortTitle}
                       </option>
                     ))}
@@ -214,28 +214,28 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
               </div>
 
               {/* Overall Emotion / Rating Selector */}
-              <div className="glass-panel p-4 rounded-2xl border-white/10 space-y-2">
-                <label className="text-xs font-bold text-slate-200 block">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                <label className="text-xs font-bold text-slate-800 block">
                   Tingkat Kepuasan Secara Keseluruhan:
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { stars: 5, label: 'Sangat Puas', color: 'emerald' },
-                    { stars: 4, label: 'Puas', color: 'teal' },
-                    { stars: 3, label: 'Cukup', color: 'amber' },
-                    { stars: 2, label: 'Kurang Puas', color: 'rose' }
+                    { stars: 5, label: 'Sangat Puas' },
+                    { stars: 4, label: 'Puas' },
+                    { stars: 3, label: 'Cukup' },
+                    { stars: 2, label: 'Kurang Puas' }
                   ].map(option => (
                     <button
                       key={option.stars}
                       type="button"
                       onClick={() => setOverallRating(option.stars)}
-                      className={`p-3 rounded-xl border text-center transition-all ${
+                      className={`p-2.5 rounded-lg border text-center transition-all cursor-pointer ${
                         overallRating === option.stars
-                          ? 'bg-emerald-500/25 border-emerald-400 text-white shadow-lg'
-                          : 'bg-white/[0.03] border-white/10 text-slate-300 hover:bg-white/[0.06]'
+                          ? 'bg-emerald-700 border-emerald-700 text-white shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
-                      <div className="flex justify-center gap-0.5 text-amber-400 mb-1">
+                      <div className={`flex justify-center gap-0.5 mb-1 ${overallRating === option.stars ? 'text-amber-300' : 'text-amber-500'}`}>
                         {Array.from({ length: option.stars }).map((_, i) => (
                           <Star key={i} className="w-3 h-3 fill-current" />
                         ))}
@@ -247,16 +247,16 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
               </div>
 
               {/* 5 Specific Criteria Ratings */}
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-slate-300 block uppercase tracking-wider">
+              <div className="space-y-2.5">
+                <span className="text-xs font-bold text-slate-700 block uppercase tracking-wider">
                   Penilaian Berdasarkan 5 Unsur Pelayanan Publik:
                 </span>
                 {criteriaList.map((crit) => (
                   <div
                     key={crit.key}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-white/[0.02] border border-white/5"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200"
                   >
-                    <span className="text-xs text-slate-300 font-medium">
+                    <span className="text-xs text-slate-700 font-medium">
                       {crit.label}
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -267,19 +267,19 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
                             key={star}
                             type="button"
                             onClick={() => handleRatingChange(crit.key, star)}
-                            className="p-1 hover:scale-110 transition-transform"
+                            className="p-1 hover:scale-110 transition-transform cursor-pointer"
                           >
                             <Star
                               className={`w-4 h-4 ${
                                 isFilled
-                                  ? 'text-amber-400 fill-amber-400'
-                                  : 'text-slate-600'
+                                  ? 'text-amber-500 fill-amber-500'
+                                  : 'text-slate-300'
                               }`}
                             />
                           </button>
                         );
                       })}
-                      <span className="text-xs font-mono font-bold text-emerald-400 ml-1">
+                      <span className="text-xs font-mono font-bold text-emerald-700 ml-1">
                         {ratings[crit.key]}.0
                       </span>
                     </div>
@@ -289,7 +289,7 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
 
               {/* Feedback Input */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-200">
+                <label className="text-xs font-semibold text-slate-800">
                   Saran, Masukan, atau Apresiasi Anda:
                 </label>
                 <textarea
@@ -297,7 +297,7 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder="Ceritakan pengalaman Anda menggunakan layanan online MALA'BIRI..."
-                  className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white resize-none"
+                  className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white resize-none"
                 />
               </div>
 
@@ -305,9 +305,9 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer"
+                className="w-full py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5" />
                 <span>Kirim Penilaian IKM</span>
               </button>
             </form>
@@ -316,43 +316,43 @@ export const SatisfactionSurveyView: React.FC<SatisfactionSurveyProps> = ({
 
         {/* Public Testimonials Feed */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-white/10">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Heart className="w-4 h-4 text-rose-400 fill-rose-400" />
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
               <span>Apresiasi & Testimoni Masyarakat</span>
             </h3>
-            <span className="text-[10px] text-slate-400 font-mono">{surveys.length} Ulasan</span>
+            <span className="text-[10px] text-slate-500 font-mono">{surveys.length} Ulasan</span>
           </div>
 
           <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1">
             {surveys.map((survey) => (
               <div
                 key={survey.id}
-                className="glass-panel p-4 rounded-2xl border-white/15 space-y-2.5 relative"
+                className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 relative"
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h5 className="text-xs font-bold text-white">
+                    <h5 className="text-xs font-bold text-slate-900">
                       {survey.applicantName}
                     </h5>
-                    <p className="text-[10px] text-emerald-400 font-medium">
+                    <p className="text-[10px] text-emerald-700 font-medium">
                       {survey.serviceTitle}
                     </p>
                   </div>
-                  <div className="flex items-center gap-0.5 text-amber-400">
+                  <div className="flex items-center gap-0.5 text-amber-500">
                     {Array.from({ length: survey.overallRating }).map((_, i) => (
                       <Star key={i} className="w-3 h-3 fill-current" />
                     ))}
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-300 italic leading-relaxed">
+                <p className="text-xs text-slate-600 italic leading-relaxed">
                   "{survey.feedback}"
                 </p>
 
-                <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] text-slate-500">
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] text-slate-400">
                   <span>{formatShortDate(survey.createdAt)}</span>
-                  <span className="text-emerald-400/80 font-mono">Terverifikasi</span>
+                  <span className="text-emerald-700 font-medium">Terverifikasi</span>
                 </div>
               </div>
             ))}

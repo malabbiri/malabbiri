@@ -121,16 +121,16 @@ export default function App() {
   const approvedCount = submissions.filter(s => s.status === 'APPROVED').length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f4c75] via-[#087f5b] to-[#042831] text-slate-100 flex flex-col selection:bg-emerald-400 selection:text-slate-950 relative bg-islamic-pattern">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-emerald-500 selection:text-white relative">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-24 right-6 z-50 p-4 rounded-2xl glass-modal border-emerald-400/40 text-emerald-200 text-xs font-semibold shadow-2xl flex items-center gap-3 animate-in slide-in-from-top duration-300">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+        <div className="fixed top-24 right-6 z-50 p-4 rounded-xl bg-white border border-emerald-300 text-slate-800 text-xs font-semibold shadow-lg flex items-center gap-3 animate-in slide-in-from-top duration-300">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Main Glass Navigation */}
+      {/* Main Solid Navigation */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -223,7 +223,7 @@ export default function App() {
       <div className="fixed bottom-6 right-6 z-40">
         <button
           onClick={() => openHotlineWhatsApp()}
-          className="p-3.5 sm:px-4 sm:py-3 rounded-full sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center gap-2.5 transition-all hover:scale-105 active:scale-95 border border-white/20 cursor-pointer"
+          className="p-3.5 sm:px-4 sm:py-2.5 rounded-full sm:rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md flex items-center gap-2 transition-colors active:scale-95 border border-emerald-800 cursor-pointer"
           title={`Hubungi WhatsApp Bimas Islam: ${APP_INFO.phone}`}
         >
           <MessageCircle className="w-5 h-5 fill-current text-white" />
