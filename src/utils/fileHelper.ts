@@ -5,9 +5,9 @@ import { jsPDF } from 'jspdf';
 import { generateFileKey, getFileFromDb, storeFileInDb } from './indexedDbStorage';
 import { getFileFromChunks } from './chunkedStorage';
 
-const OFFICERS_STORAGE_KEY = 'malabbiri_officers_v2';
-const OFFICER_SESSION_KEY = 'malabbiri_officer_session_v2';
-const DELETED_OFFICERS_KEY = 'malabbiri_deleted_officer_nips_v2';
+const OFFICERS_STORAGE_KEY = 'malabbiri_officers_v4';
+const OFFICER_SESSION_KEY = 'malabbiri_officer_session_v4';
+const DELETED_OFFICERS_KEY = 'malabbiri_deleted_officer_nips_v4';
 
 export const DEFAULT_ADMIN_EMAIL = 'jadilahterbaik@gmail.com';
 
@@ -48,16 +48,25 @@ export function getDeletedOfficerNips(): string[] {
   }
 }
 
-// Only neutral, official primary administrator account
+// Akun Admin & Petugas Resmi Terdaftar
 export const AUTHORIZED_OFFICERS: OfficerAccount[] = [
   {
-    nip: '199008202015031002',
-    username: 'admin',
-    name: 'Administrator Bimas Islam',
-    jabatan: 'Kepala Seksi Bimas Islam / Administrator Utama',
+    nip: '197105041998031003',
+    username: 'tajuddin',
+    name: 'H. Tajuddin, S.Ag., M.Ag.',
+    jabatan: 'Kepala Seksi Bimas Islam',
     role: 'KASI',
     pin: '123456',
-    email: DEFAULT_ADMIN_EMAIL
+    email: 'tajuddin@kemenag.go.id'
+  },
+  {
+    nip: '198902122019032011',
+    username: 'ridhayani',
+    name: 'Ridhayani',
+    jabatan: 'Staf / Verifikator Berkas',
+    role: 'VERIFIKATOR',
+    pin: '123456',
+    email: 'ridhayani@kemenag.go.id'
   }
 ];
 
@@ -277,10 +286,10 @@ export function getOfficerSession(): OfficerSession | null {
       parsed.officer = getDefaultAdminAccount();
     }
     if (!parsed.officer.name || PURGED_DEMO_NAMES.includes(parsed.officer.name)) {
-      parsed.officer.name = 'Administrator Bimas Islam';
+      parsed.officer.name = AUTHORIZED_OFFICERS[0].name;
     }
     if (!parsed.officer.nip || PURGED_DEMO_NIPS.includes(parsed.officer.nip)) {
-      parsed.officer.nip = '199008202015031002';
+      parsed.officer.nip = AUTHORIZED_OFFICERS[0].nip;
     }
     if (!parsed.officer.role) {
       parsed.officer.role = 'KASI';
