@@ -158,7 +158,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
         <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
           Lacak Perkembangan Dokumen Anda
         </h2>
-        <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
+        <p className="text-xs sm:text-sm text-emerald-100 font-medium max-w-xl mx-auto">
           Masukkan Nomor Tiket Registrasi (format: MLB-2026-XXXX), Nomor WhatsApp pemohon, atau Nama Pemohon.
         </p>
       </div>
@@ -167,13 +167,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
       <div className="max-w-2xl mx-auto">
         <form onSubmit={handleFormSubmit} className="glass-panel p-2 rounded-2xl border-white/20 flex gap-2">
           <div className="relative flex-1">
-            <Search className="w-5 h-5 text-emerald-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <Search className="w-5 h-5 text-emerald-300 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Masukkan No. Tiket, No. HP/WA, atau NIK..."
-              className="w-full pl-12 pr-4 py-3 bg-transparent text-white placeholder:text-slate-400 text-sm focus:outline-none"
+              className="w-full pl-12 pr-4 py-3 bg-transparent text-white placeholder:text-emerald-100/60 text-sm focus:outline-none font-medium"
             />
           </div>
           <button
@@ -187,7 +187,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
 
         {/* Quick Queries (Dynamic from real submissions) */}
         {submissions.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-3 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-3 text-xs text-emerald-100 font-medium">
             <span>Berkas terbaru:</span>
             {submissions.slice(0, 3).map((sub) => (
               <button
@@ -196,7 +196,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   setSearchQuery(sub.id);
                   performSearch(sub.id);
                 }}
-                className="px-2.5 py-1 rounded-lg glass-panel hover:bg-white/10 text-emerald-300 font-mono text-[11px]"
+                className="px-2.5 py-1 rounded-lg glass-panel hover:bg-white/15 text-emerald-200 hover:text-white font-mono text-[11px] font-semibold border-white/20"
               >
                 {sub.id} ({sub.applicantName.split(' ')[0]})
               </button>
@@ -212,7 +212,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/10">
             <div>
               <div className="flex flex-wrap items-center gap-2.5 mb-2">
-                <span className="text-xl sm:text-2xl font-mono font-extrabold text-white bg-slate-900/80 px-3 py-1 rounded-xl border border-white/15">
+                <span className="text-xl sm:text-2xl font-mono font-extrabold text-white bg-slate-900/80 px-3 py-1 rounded-xl border border-white/20">
                   {activeSubmission.id}
                 </span>
                 {getStatusBadge(activeSubmission.status)}
@@ -220,9 +220,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
               <h3 className="text-lg sm:text-xl font-bold text-white">
                 {activeSubmission.serviceTitle}
               </h3>
-              <p className="text-xs text-slate-300 mt-1 flex items-center gap-2">
-                <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Diajukan pada: <strong>{formatIndoDate(activeSubmission.submittedAt)}</strong></span>
+              <p className="text-xs text-emerald-100 font-medium mt-1 flex items-center gap-2">
+                <Calendar className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Diajukan pada: <strong className="text-white">{formatIndoDate(activeSubmission.submittedAt)}</strong></span>
               </p>
             </div>
 
@@ -271,7 +271,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
 
           {/* 4-Stage Visual Timeline */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <Clock className="w-4 h-4 text-emerald-400" />
               <span>Tahapan Progres Dokumen</span>
             </h4>
@@ -290,8 +290,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                       isCurrent
                         ? 'bg-emerald-950/60 border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
                         : isCompleted
-                        ? 'bg-white/[0.04] border-white/15'
-                        : 'bg-white/[0.01] border-white/5 opacity-50'
+                        ? 'bg-white/[0.06] border-white/20'
+                        : 'bg-white/[0.02] border-white/10 opacity-70'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -300,12 +300,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                           ? 'bg-emerald-500 text-white'
                           : isCurrent
                           ? 'bg-gradient-to-tr from-emerald-400 to-cyan-400 text-slate-900 animate-pulse'
-                          : 'bg-white/10 text-slate-400'
+                          : 'bg-white/15 text-white'
                       }`}>
                         {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : stageNumber}
                       </span>
 
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-200">
                         {isCompleted ? 'Selesai' : isCurrent ? 'Sedang Diproses' : 'Menunggu'}
                       </span>
                     </div>
@@ -313,7 +313,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                     <h5 className="text-xs font-bold text-white mb-1">
                       {stage.title}
                     </h5>
-                    <p className="text-[11px] text-slate-400 leading-snug">
+                    <p className="text-[11px] text-emerald-100 font-medium leading-snug">
                       {stage.desc}
                     </p>
                   </div>
@@ -353,32 +353,32 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
-                    <span className="text-slate-400 block">Nama Pemohon:</span>
+                    <span className="text-emerald-100 font-medium block">Nama Pemohon:</span>
                     <strong className="text-white text-sm font-semibold">{activeSubmission.applicantName}</strong>
                   </div>
 
                   <div>
-                    <span className="text-slate-400 block">No. WhatsApp / HP:</span>
+                    <span className="text-emerald-100 font-medium block">No. WhatsApp / HP:</span>
                     <strong className="text-emerald-300 font-mono text-sm">{activeSubmission.phone}</strong>
                   </div>
 
                   {activeSubmission.institutionName && (
                     <div>
-                      <span className="text-slate-400 block">Nama Lembaga / Masjid:</span>
+                      <span className="text-emerald-100 font-medium block">Nama Lembaga / Masjid:</span>
                       <strong className="text-white font-semibold">{activeSubmission.institutionName}</strong>
                     </div>
                   )}
 
                   {activeSubmission.district && (
                     <div>
-                      <span className="text-slate-400 block">Kecamatan:</span>
+                      <span className="text-emerald-100 font-medium block">Kecamatan:</span>
                       <strong className="text-white font-semibold">Kec. {activeSubmission.district}</strong>
                     </div>
                   )}
 
                   <div className="sm:col-span-2">
-                    <span className="text-slate-400 block">Alamat Lengkap:</span>
-                    <p className="text-slate-200 mt-0.5">{activeSubmission.address}</p>
+                    <span className="text-emerald-100 font-medium block">Alamat Lengkap:</span>
+                    <p className="text-white font-medium mt-0.5">{activeSubmission.address}</p>
                   </div>
                 </div>
               </div>
@@ -404,7 +404,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                           <FileText className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                           <div className="truncate">
                             <p className="font-semibold text-white truncate">{file.fileName}</p>
-                            <p className="text-[10px] text-slate-400">{file.label}</p>
+                            <p className="text-[11px] text-emerald-200 font-medium">{file.label}</p>
                           </div>
                         </div>
 
@@ -437,7 +437,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400">Tidak ada berkas fisik yang terlampir.</p>
+                  <p className="text-xs text-emerald-100 font-medium">Tidak ada berkas fisik yang terlampir.</p>
                 )}
               </div>
             </div>
@@ -453,25 +453,25 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   <h5 className="text-xs font-bold text-white uppercase tracking-wider">
                     Sistem Verifikasi Digital
                   </h5>
-                  <p className="text-[11px] text-slate-300">
+                  <p className="text-[11px] text-emerald-100 font-medium">
                     Seksi Bimbingan Masyarakat Islam Kemenag Kab. Gowa
                   </p>
                 </div>
 
                 <div className="p-3 rounded-xl bg-slate-950/80 border border-white/15 inline-block mx-auto">
                   <QrCode className="w-24 h-24 text-emerald-400 mx-auto" />
-                  <span className="block font-mono text-[10px] text-slate-300 font-bold mt-1">
+                  <span className="block font-mono text-[10px] text-white font-bold mt-1">
                     {activeSubmission.verificationCode}
                   </span>
                 </div>
 
-                <p className="text-[10px] text-slate-400 leading-tight">
+                <p className="text-[10px] text-emerald-100 font-medium leading-tight">
                   QR Code ini memuat token verifikasi keaslian dokumen resmi Kemenag Kab. Gowa.
                 </p>
 
                 <button
                   onClick={() => openHotlineWhatsApp(`Pertanyaan mengenai berkas tiket ${activeSubmission.id}`)}
-                  className="w-full py-2 px-3 rounded-xl glass-panel hover:bg-white/10 text-[11px] text-emerald-300 font-semibold flex items-center justify-center gap-1.5 border-emerald-500/30"
+                  className="w-full py-2 px-3 rounded-xl glass-panel hover:bg-white/15 text-[11px] text-emerald-200 hover:text-white font-semibold flex items-center justify-center gap-1.5 border-emerald-400/30 cursor-pointer"
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
                   <span>Tanya Petugas Terkait Tiket Ini</span>
@@ -480,14 +480,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
 
               {/* History Log */}
               <div className="glass-panel p-4 rounded-2xl border-white/10 space-y-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider block">
                   Catatan Riwayat Berkas:
                 </span>
                 <div className="space-y-2 text-xs">
                   {activeSubmission.statusHistory.map((hist, hIdx) => (
-                    <div key={hIdx} className="border-l-2 border-emerald-400/40 pl-2.5 py-0.5 space-y-0.5">
+                    <div key={hIdx} className="border-l-2 border-emerald-400/50 pl-2.5 py-0.5 space-y-0.5">
                       <p className="font-semibold text-white">{hist.note}</p>
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-[11px] text-emerald-100 font-medium">
                         {formatIndoDate(hist.timestamp)} - {hist.officerName}
                       </p>
                     </div>
@@ -501,19 +501,19 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
         <div className="glass-panel p-12 rounded-3xl text-center space-y-4 max-w-lg mx-auto">
           <AlertCircle className="w-12 h-12 text-amber-400 mx-auto" />
           <h4 className="text-lg font-bold text-white">Berkas Tidak Ditemukan</h4>
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <p className="text-xs text-emerald-100 font-medium leading-relaxed">
             Tidak ada dokumen yang cocok dengan kata kunci "{searchQuery}". Pastikan Nomor Tiket atau No. HP sesuai dengan yang didaftarkan.
           </p>
           <div className="flex justify-center gap-3 pt-2">
             <button
               onClick={() => { setSearchQuery(''); setHasSearched(false); }}
-              className="px-4 py-2 rounded-xl text-xs font-semibold glass-panel text-white"
+              className="px-4 py-2 rounded-xl text-xs font-semibold glass-panel text-white hover:bg-white/10"
             >
               Reset Pencarian
             </button>
             <button
               onClick={onSelectServiceTab}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 text-white"
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-white"
             >
               Ajukan Permohonan Baru
             </button>
@@ -523,7 +523,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
         <div className="glass-panel p-12 rounded-3xl text-center space-y-3 max-w-lg mx-auto">
           <Search className="w-10 h-10 text-emerald-400 mx-auto" />
           <h4 className="text-base font-bold text-white">Silakan Masukkan Nomor Tiket</h4>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-emerald-100 font-medium">
             Ketik nomor tiket di kolom pencarian di atas untuk melihat detail berkas dan progres verifikasi.
           </p>
         </div>

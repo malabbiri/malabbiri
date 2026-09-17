@@ -102,7 +102,7 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
             <h2 className="text-2xl font-black text-white tracking-tight">
               Login Admin
             </h2>
-            <p className="text-xs text-slate-300 mt-1">
+            <p className="text-xs text-emerald-100 font-medium mt-1">
               Seksi Bimas Islam Kemenag Kabupaten Gowa
             </p>
           </div>
@@ -110,15 +110,15 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
 
         {/* Error / Success Messages */}
         {errorMsg && (
-          <div className="mb-5 p-3 rounded-xl bg-red-950/70 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+          <div className="mb-5 p-3 rounded-xl bg-red-950/80 border border-red-400 text-white font-medium text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-300 flex-shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {successMsg && (
-          <div className="mb-5 p-3 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <div className="mb-5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-400 text-white font-medium text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-300 flex-shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
@@ -126,7 +126,7 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
         {/* Direct Login Form */}
         <form onSubmit={handleLogin} className="space-y-4 text-xs">
           <div className="space-y-1.5">
-            <label className="text-slate-200 font-semibold block">
+            <label className="text-white font-bold block text-sm">
               NIP:
             </label>
             <input
@@ -135,12 +135,12 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
               onChange={(e) => setNip(e.target.value)}
               placeholder="Masukkan NIP Anda..."
               autoFocus
-              className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-medium text-sm transition-all"
+              className="w-full px-4 py-3 rounded-xl bg-white/15 border border-white/30 text-white placeholder:text-emerald-100/70 focus:outline-none focus:ring-2 focus:ring-emerald-300 font-medium text-sm transition-all"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-slate-200 font-semibold block">
+            <label className="text-white font-bold block text-sm">
               Password:
             </label>
             <div className="relative">
@@ -149,12 +149,12 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Masukkan Password..."
-                className="w-full px-4 py-3 pr-11 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-medium text-sm transition-all"
+                className="w-full px-4 py-3 pr-11 rounded-xl bg-white/15 border border-white/30 text-white placeholder:text-emerald-100/70 focus:outline-none focus:ring-2 focus:ring-emerald-300 font-medium text-sm transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 cursor-pointer transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-200 hover:text-white p-1 cursor-pointer transition-colors"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />
@@ -165,13 +165,13 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="flex items-center justify-between text-xs text-white pt-1">
+            <label className="flex items-center gap-2 cursor-pointer font-medium">
               <input
                 type="checkbox"
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
-                className="rounded border-white/20 text-emerald-500 focus:ring-emerald-400"
+                className="rounded border-white/40 text-emerald-400 focus:ring-emerald-300"
               />
               <span>Ingat sesi login</span>
             </label>
@@ -188,10 +188,10 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
         </form>
 
         {/* Back Link */}
-        <div className="text-center mt-6 pt-4 border-t border-white/10">
+        <div className="text-center mt-6 pt-4 border-t border-white/20">
           <button
             onClick={onBackToServices}
-            className="text-xs text-slate-300 hover:text-white inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+            className="text-xs text-emerald-100 hover:text-white font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Kembali ke Beranda Layanan</span>

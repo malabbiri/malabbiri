@@ -455,7 +455,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
             Panel Verifikasi & Validasi Dokumen
           </h2>
-          <p className="text-xs sm:text-sm text-slate-300">
+          <p className="text-xs sm:text-sm text-emerald-100 font-medium">
             Pemeriksaan kelengkapan berkas, validasi status permohonan, pratinjau dokumen pemohon, dan notifikasi otomatis WhatsApp.
           </p>
         </div>
@@ -472,7 +472,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
           <button
             onClick={exportToCSV}
-            className="px-4 py-2.5 rounded-xl glass-panel hover:bg-white/10 text-slate-200 text-xs font-semibold flex items-center gap-2 border-white/20"
+            className="px-4 py-2.5 rounded-xl glass-panel hover:bg-white/10 text-white text-xs font-semibold flex items-center gap-2 border-white/20"
           >
             <Download className="w-4 h-4 text-cyan-300" />
             <span>Export CSV</span>
@@ -490,28 +490,28 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="glass-panel p-4 rounded-2xl border-white/15">
-          <span className="text-xs text-slate-400 block mb-1">Total Permohonan</span>
+        <div className="glass-panel p-4 rounded-2xl border-white/20">
+          <span className="text-xs text-emerald-200 font-medium block mb-1">Total Permohonan</span>
           <span className="text-2xl font-extrabold text-white">{submissions.length}</span>
-          <span className="text-[10px] text-slate-400 block mt-1">Seluruh layanan digital</span>
+          <span className="text-[10px] text-emerald-100 block mt-1">Seluruh layanan digital</span>
         </div>
 
         <div className="glass-panel p-4 rounded-2xl border-amber-500/30 bg-amber-950/20">
-          <span className="text-xs text-amber-300 block mb-1">Menunggu / Diverifikasi</span>
+          <span className="text-xs text-amber-200 font-medium block mb-1">Menunggu / Diverifikasi</span>
           <span className="text-2xl font-extrabold text-amber-300">{countPending}</span>
-          <span className="text-[10px] text-amber-200/80 block mt-1">Perlu ditindaklanjuti</span>
+          <span className="text-[10px] text-amber-100 block mt-1">Perlu ditindaklanjuti</span>
         </div>
 
         <div className="glass-panel p-4 rounded-2xl border-emerald-500/30 bg-emerald-950/20">
-          <span className="text-xs text-emerald-300 block mb-1">Disetujui & Selesai</span>
+          <span className="text-xs text-emerald-200 font-medium block mb-1">Disetujui & Selesai</span>
           <span className="text-2xl font-extrabold text-emerald-300">{countApproved}</span>
-          <span className="text-[10px] text-emerald-200/80 block mt-1">SKT / Rekomendasi Terbit</span>
+          <span className="text-[10px] text-emerald-100 block mt-1">SKT / Rekomendasi Terbit</span>
         </div>
 
         <div className="glass-panel p-4 rounded-2xl border-rose-500/30 bg-rose-950/20">
-          <span className="text-xs text-rose-300 block mb-1">Perlu Perbaikan (Revisi)</span>
+          <span className="text-xs text-rose-200 font-medium block mb-1">Perlu Perbaikan (Revisi)</span>
           <span className="text-2xl font-extrabold text-rose-300">{countRevision}</span>
-          <span className="text-[10px] text-rose-200/80 block mt-1">Menunggu respon pemohon</span>
+          <span className="text-[10px] text-rose-100 block mt-1">Menunggu respon pemohon</span>
         </div>
       </div>
 
@@ -520,13 +520,13 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Search */}
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-emerald-200 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari ID tiket, nama, HP..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-xs text-white"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-xs text-white placeholder:text-emerald-100/60 font-medium"
             />
           </div>
 
@@ -535,7 +535,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white"
+              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white font-medium"
             >
               <option value="ALL" className="bg-slate-900">Semua Status</option>
               <option value="SUBMITTED" className="bg-slate-900">Diajukan (Baru)</option>
@@ -552,7 +552,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             <select
               value={filterService}
               onChange={(e) => setFilterService(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white truncate"
+              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white font-medium truncate"
             >
               <option value="ALL" className="bg-slate-900">Semua 9 Layanan</option>
               {SERVICES_LIST.map(svc => (
@@ -568,7 +568,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             <select
               value={filterDistrict}
               onChange={(e) => setFilterDistrict(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white"
+              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white font-medium"
             >
               <option value="ALL" className="bg-slate-900">Semua Kecamatan (18)</option>
               {GOWA_DISTRICTS.map(dist => (
@@ -584,77 +584,77 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       {/* Submissions Table */}
       <div className="glass-panel rounded-2xl border-white/15 overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-white/[0.05] text-[11px] uppercase font-bold text-slate-400 border-b border-white/10">
+          <table className="w-full text-left text-xs text-white">
+            <thead className="bg-white/[0.08] text-[11px] uppercase font-bold text-emerald-200 border-b border-white/15">
               <tr>
-                <th className="px-5 py-3.5">ID Tiket</th>
-                <th className="px-5 py-3.5">Tanggal</th>
-                <th className="px-5 py-3.5">Layanan</th>
-                <th className="px-5 py-3.5">Pemohon & Lembaga</th>
-                <th className="px-5 py-3.5">Kecamatan</th>
-                <th className="px-5 py-3.5">Berkas</th>
-                <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-right">Aksi</th>
+                <th className="px-5 py-3.5 text-white">ID Tiket</th>
+                <th className="px-5 py-3.5 text-emerald-200">Tanggal</th>
+                <th className="px-5 py-3.5 text-emerald-200">Layanan</th>
+                <th className="px-5 py-3.5 text-emerald-200">Pemohon & Lembaga</th>
+                <th className="px-5 py-3.5 text-emerald-200">Kecamatan</th>
+                <th className="px-5 py-3.5 text-emerald-200">Berkas</th>
+                <th className="px-5 py-3.5 text-emerald-200">Status</th>
+                <th className="px-5 py-3.5 text-right text-emerald-200">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
               {filteredList.map((sub) => {
                 const filesCount = Array.isArray(sub.files) ? sub.files.length : 0;
                 return (
-                <tr key={sub.id || Math.random().toString()} className="hover:bg-white/[0.03] transition-colors">
+                <tr key={sub.id || Math.random().toString()} className="hover:bg-white/[0.05] transition-colors">
                   <td className="px-5 py-4 font-mono font-bold text-white whitespace-nowrap">
                     {sub.id || '-'}
                   </td>
-                  <td className="px-5 py-4 whitespace-nowrap text-slate-400 text-[11px]">
+                  <td className="px-5 py-4 whitespace-nowrap text-emerald-100 text-[11px] font-medium">
                     {sub.submittedAt ? formatIndoDate(sub.submittedAt) : '-'}
                   </td>
                   <td className="px-5 py-4 font-semibold text-white max-w-[200px] truncate">
                     {sub.serviceTitle || 'Layanan'}
                   </td>
                   <td className="px-5 py-4">
-                    <div className="font-semibold text-white truncate max-w-[180px]">{sub.applicantName || '-'}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{sub.phone || '-'}</div>
+                    <div className="font-bold text-white truncate max-w-[180px]">{sub.applicantName || '-'}</div>
+                    <div className="text-[11px] text-emerald-200 font-mono font-medium">{sub.phone || '-'}</div>
                     {sub.institutionName && (
-                      <div className="text-[10px] text-emerald-300 truncate max-w-[180px]">{sub.institutionName}</div>
+                      <div className="text-[11px] text-amber-200 truncate max-w-[180px] font-medium">{sub.institutionName}</div>
                     )}
                   </td>
-                  <td className="px-5 py-4 whitespace-nowrap text-slate-300 font-medium">
+                  <td className="px-5 py-4 whitespace-nowrap text-white font-medium">
                     {sub.district ? `Kec. ${sub.district}` : '-'}
                   </td>
                   <td className="px-5 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-500/20">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-400/40">
                       <FileText className="w-3 h-3" />
                       {filesCount} file
                     </span>
                   </td>
                   <td className="px-5 py-4 whitespace-nowrap">
                     {sub.status === 'APPROVED' && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/25 text-emerald-200 border border-emerald-400">
                         Disetujui
                       </span>
                     )}
                     {sub.status === 'VERIFYING' && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/25 text-amber-200 border border-amber-400">
                         Verifikasi
                       </span>
                     )}
                     {sub.status === 'REVIEW' && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/25 text-blue-200 border border-blue-400">
                         Telaah
                       </span>
                     )}
                     {sub.status === 'SUBMITTED' && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-500/25 text-cyan-200 border border-cyan-400">
                         Baru
                       </span>
                     )}
                     {sub.status === 'REVISION_NEEDED' && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/25 text-rose-200 border border-rose-400">
                         Perlu Revisi
                       </span>
                     )}
                     {sub.status === 'REJECTED' && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-500/20 text-slate-300 border border-slate-500/30">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-700/50 text-slate-100 border border-slate-400">
                         Ditolak
                       </span>
                     )}
@@ -712,8 +712,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
 
         {filteredList.length === 0 && (
-          <div className="p-12 text-center text-slate-300 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto text-slate-400">
+          <div className="p-12 text-center text-white space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto text-emerald-300">
               <FileText className="w-6 h-6" />
             </div>
             <h4 className="text-base font-bold text-white">
@@ -721,7 +721,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 ? 'Belum Ada Berkas Permohonan Masuk' 
                 : 'Tidak Ada Permohonan yang Sesuai dengan Filter'}
             </h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+            <p className="text-xs text-emerald-100 max-w-md mx-auto leading-relaxed font-medium">
               {submissions.length === 0
                 ? 'Seluruh data demo telah dibersihkan. Setiap berkas dan lampiran yang diajukan oleh masyarakat melalui formulir layanan online akan langsung masuk ke tabel ini untuk diperiksa dan divalidasi.'
                 : 'Coba ubah kata kunci pencarian atau sesuaikan opsi filter status, layanan, atau kecamatan.'}
@@ -742,7 +742,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   <h3 className="text-base font-bold text-white">
                     Verifikasi Dokumen: {selectedSubmission.id}
                   </h3>
-                  <p className="text-[11px] text-slate-300">
+                  <p className="text-[11px] text-emerald-200 font-medium">
                     {selectedSubmission.serviceTitle}
                   </p>
                 </div>
@@ -750,7 +750,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
               <button
                 onClick={() => setSelectedSubmission(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -767,28 +767,28 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
               {/* Applicant Info Banner */}
               <div className="glass-panel p-4 rounded-2xl border-white/15 space-y-2">
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <h4 className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider">
                   Informasi Pemohon & Lokasi:
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
-                    <span className="text-slate-400 block">Nama Pemohon:</span>
+                    <span className="text-emerald-100/90 font-medium block">Nama Pemohon:</span>
                     <strong className="text-white text-sm font-semibold">{selectedSubmission.applicantName}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Nomor HP/WA:</span>
+                    <span className="text-emerald-100/90 font-medium block">Nomor HP/WA:</span>
                     <strong className="text-emerald-300 font-mono text-sm">{selectedSubmission.phone}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Kecamatan:</span>
+                    <span className="text-emerald-100/90 font-medium block">Kecamatan:</span>
                     <strong className="text-white">{selectedSubmission.district || '-'}</strong>
                   </div>
                   <div className="sm:col-span-2">
-                    <span className="text-slate-400 block">Alamat:</span>
-                    <p className="text-slate-200">{selectedSubmission.address || '-'}</p>
+                    <span className="text-emerald-100/90 font-medium block">Alamat:</span>
+                    <p className="text-white font-medium">{selectedSubmission.address || '-'}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Kode Verifikasi:</span>
+                    <span className="text-emerald-100/90 font-medium block">Kode Verifikasi:</span>
                     <span className="font-mono font-bold text-emerald-400">{selectedSubmission.verificationCode || selectedSubmission.id}</span>
                   </div>
                 </div>
@@ -802,7 +802,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       <FolderDown className="w-4 h-4 text-emerald-400" />
                       <span>Lampiran Berkas yang Diunggah ({Array.isArray(selectedSubmission.files) ? selectedSubmission.files.length : 0} File):</span>
                     </h4>
-                    <p className="text-[10px] text-emerald-300">
+                    <p className="text-[10px] text-emerald-200 font-medium">
                       Tersimpan di Basis Data MALA'BIRI • Pratinjau dokumen atau unduh file asli
                     </p>
                   </div>
@@ -830,12 +830,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                         </div>
                         <div className="truncate">
                           <p className="font-semibold text-white truncate text-xs">{file.fileName}</p>
-                          <p className="text-[10px] text-slate-300">{file.label}</p>
+                          <p className="text-[11px] text-emerald-100 font-medium">{file.label}</p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[10px] font-mono text-emerald-300">
                               {(file.fileSize / (1024 * 1024)).toFixed(2)} MB
                             </span>
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-emerald-200 font-medium">
                               • {new Date(file.uploadedAt).toLocaleDateString('id-ID')}
                             </span>
                             <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-semibold">
@@ -880,7 +880,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-200">
+                    <label className="text-xs font-semibold text-white">
                       Pilih Status Dokumen:
                     </label>
                     <select
@@ -898,19 +898,19 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-200">
+                    <label className="text-xs font-semibold text-white">
                       Nama Petugas Verifikator:
                     </label>
                     <input
                       type="text"
                       value={officerName}
                       onChange={(e) => setOfficerName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white"
+                      className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white font-medium"
                     />
                   </div>
 
                   <div className="sm:col-span-2 space-y-1">
-                    <label className="text-xs font-semibold text-slate-200">
+                    <label className="text-xs font-semibold text-white">
                       Catatan / Keterangan Petugas (Ditampilkan ke Pemohon & WA):
                     </label>
                     <textarea
@@ -918,14 +918,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       value={officerNote}
                       onChange={(e) => setOfficerNote(e.target.value)}
                       placeholder="Contoh: Berkas persyaratan lengkap dan sesuai PMA 29/2019. SKT nomor B-1204 telah diterbitkan."
-                      className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white resize-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white placeholder:text-emerald-100/60 resize-none font-medium"
                     />
                   </div>
                 </div>
 
                 {/* Notification Preview */}
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-white/10 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-white/15 space-y-1">
+                  <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider block">
                     Format Pesan WhatsApp yang akan dikirim:
                   </span>
                   <p className="font-mono text-[10px] text-emerald-300 line-clamp-3">
@@ -1048,44 +1048,44 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-slate-300">Nama Lengkap & Gelar:</label>
+                      <label className="text-white font-medium">Nama Lengkap & Gelar:</label>
                       <input
                         type="text"
                         value={newOfficerName}
                         onChange={(e) => setNewOfficerName(e.target.value)}
                         placeholder="Nama dan Gelar"
-                        className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-emerald-100/60 text-xs"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-slate-300">NIP Pegawai:</label>
+                      <label className="text-white font-medium">NIP Pegawai:</label>
                       <input
                         type="text"
                         value={newOfficerNip}
                         onChange={(e) => setNewOfficerNip(e.target.value)}
                         placeholder="NIP 18 digit"
-                        className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-mono"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-emerald-100/60 text-xs font-mono"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-slate-300">Username:</label>
+                      <label className="text-white font-medium">Username:</label>
                       <input
                         type="text"
                         value={newOfficerUsername}
                         onChange={(e) => setNewOfficerUsername(e.target.value)}
                         placeholder="username"
-                        className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-emerald-100/60 text-xs"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-slate-300">Peran / Hak Akses:</label>
+                      <label className="text-white font-medium">Peran / Hak Akses:</label>
                       <select
                         value={newOfficerRole}
                         onChange={(e) => setNewOfficerRole(e.target.value as 'KASI' | 'VERIFIKATOR')}
-                        className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-xs"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-xs font-medium"
                       >
                         <option value="VERIFIKATOR">Verifikator Berkas Digital</option>
                         <option value="KASI">Kepala Seksi (KASI) Bimas Islam</option>
@@ -1094,20 +1094,20 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-slate-300">PIN / Sandi Keamanan:</label>
+                    <label className="text-white font-medium">PIN / Sandi Keamanan:</label>
                     <input
                       type="password"
                       value={newOfficerPin}
                       onChange={(e) => setNewOfficerPin(e.target.value)}
                       placeholder="PIN minimal 4 karakter"
-                      className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs"
+                      className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-emerald-100/60 text-xs"
                     />
                   </div>
 
                   <div className="flex justify-end pt-1">
                     <button
                       type="submit"
-                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md"
                     >
                       Simpan Akun Petugas
                     </button>
@@ -1134,10 +1134,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                           </span>
                         )}
                       </div>
-                      <p className="text-slate-400 text-[11px]">
-                        NIP: <span className="font-mono text-slate-300">{off.nip}</span> • User: <span className="font-mono text-slate-300">{off.username}</span>
+                      <p className="text-emerald-100 text-[11px] font-medium">
+                        NIP: <span className="font-mono text-white font-bold">{off.nip}</span> • User: <span className="font-mono text-emerald-300 font-bold">{off.username}</span>
                       </p>
-                      <p className="text-slate-400 text-[11px]">{off.role === 'KASI' ? 'Kepala Seksi Bimas Islam' : 'Verifikator Berkas Bimas Islam'}</p>
+                      <p className="text-emerald-200 text-[11px]">{off.role === 'KASI' ? 'Kepala Seksi Bimas Islam' : 'Verifikator Berkas Bimas Islam'}</p>
                     </div>
 
                     <div>
