@@ -10,7 +10,8 @@ import {
   Clock, 
   Building,
   LayoutGrid,
-  Lock
+  Lock,
+  Sparkles
 } from 'lucide-react';
 import { APP_INFO } from '../data/services';
 import { checkOfficeOpenStatus } from '../utils/date';
@@ -21,13 +22,15 @@ interface NavbarProps {
   setActiveTab: (tab: 'services' | 'tracking' | 'verification' | 'stats' | 'survey') => void;
   pendingVerificationCount: number;
   isOfficerLoggedIn?: boolean;
+  onShowIntro?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   pendingVerificationCount,
-  isOfficerLoggedIn = false
+  isOfficerLoggedIn = false,
+  onShowIntro
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [officeStatus, setOfficeStatus] = useState(checkOfficeOpenStatus());
@@ -148,6 +151,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Action CTA & Mobile Menu Toggle */}
           <div className="flex items-center gap-2.5">
+            {/* Intro Replay Button */}
+            {onShowIntro && (
+              <button
+                onClick={onShowIntro}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-100 hover:text-white hover:bg-emerald-700/60 border border-emerald-700/60 transition-colors cursor-pointer"
+                title="Putar Animasi Intro MALA'BIRI"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Intro</span>
+              </button>
+            )}
+
             {/* Tombol Petugas - Solid White sesuai arahan */}
             <button
               onClick={() => setActiveTab('verification')}
@@ -215,7 +230,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             );
           })}
 
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
+            {onShowIntro && (
+              <button
+                onClick={() => {
+                  onShowIntro();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-emerald-100 hover:text-white bg-emerald-800/80 border border-emerald-700 hover:bg-emerald-700 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Lihat Animasi Intro MALA'BIRI</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 openHotlineWhatsApp();
