@@ -95,16 +95,14 @@ export const OfficerLoginGate: React.FC<OfficerLoginGateProps> = ({
         o.username.toLowerCase() === email.toLowerCase()
       );
 
-      const officerAccount: OfficerAccount = existingMatch || {
-        nip: AUTHORIZED_OFFICERS[0].nip,
-        username: email.toLowerCase(),
-        name: displayName,
-        jabatan: AUTHORIZED_OFFICERS[0].jabatan,
-        role: 'KASI',
-        pin: '123456',
-        email: email
-      };
+      // Hanya izinkan akun yang sudah terdaftar resmi oleh Admin
+      if (!existingMatch) {
+        setIsGoogleLoading(false);
+        setErrorMsg(`Akun Google (${email}) belum terdaftar sebagai administrator/petugas resmi. Akses ditolak.`);
+        return;
+      }
 
+      const officerAccount: OfficerAccount = existingMatch;
       saveOfficerAccount(officerAccount);
 
       const session: OfficerSession = {
