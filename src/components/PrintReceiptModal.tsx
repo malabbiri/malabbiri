@@ -143,10 +143,16 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
                     <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Waktu Pengajuan</td>
                     <td className="px-3 py-2 text-slate-900">{formatIndoDate(submission.submittedAt)}</td>
                   </tr>
-                  <tr>
+                  <tr className={submission.epaiGrade ? "border-b border-slate-300" : ""}>
                     <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Status Permohonan</td>
                     <td className="px-3 py-2 font-bold text-emerald-800">{getStatusLabelIndo(submission.status)}</td>
                   </tr>
+                  {submission.epaiGrade && (
+                    <tr>
+                      <td className="px-3 py-2 font-semibold bg-emerald-50 text-emerald-900">Hasil Penilaian (e-PAI)</td>
+                      <td className="px-3 py-2 font-bold text-emerald-800">Predikat: {submission.epaiGrade}</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

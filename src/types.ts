@@ -1,10 +1,13 @@
 export type ApplicationStatus =
-  | 'SUBMITTED'       // Diajukan (Menunggu Verifikasi)
+  | 'SUBMITTED'       // Diajukan / Berkas Masuk
   | 'VERIFYING'       // Sedang Diverifikasi Berkas
-  | 'REVIEW'          // Proses Telaah Bimas Islam
+  | 'REVIEW'          // Proses Telaah / Pengukuran
+  | 'APPROVED'        // Disetujui
+  | 'COMPLETED'       // Disetujui & Dokumen Diterbitkan
   | 'REVISION_NEEDED' // Perlu Perbaikan Berkas
-  | 'APPROVED'        // Disetujui & Dokumen Diterbitkan
   | 'REJECTED';       // Ditolak
+
+export type EpaiGrade = 'Baik Sekali' | 'Baik' | 'Cukup' | 'Kurang';
 
 export interface StatusHistoryItem {
   status: ApplicationStatus;
@@ -63,6 +66,7 @@ export interface SubmissionRecord {
   checklistConfirmed?: string[];
   officerNotes?: string;
   verificationCode: string;
+  epaiGrade?: EpaiGrade | string;
 }
 
 export interface FormFieldDefinition {

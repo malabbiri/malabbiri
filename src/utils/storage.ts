@@ -363,18 +363,23 @@ export function updateSubmissionStatus(
   id: string,
   newStatus: ApplicationStatus,
   note: string,
-  officerName: string
+  officerName: string,
+  epaiGrade?: string
 ): SubmissionRecord | null {
   const index = cachedSubmissions.findIndex((item) => item.id.toUpperCase() === id.toUpperCase());
   if (index === -1) return null;
 
   const current = cachedSubmissions[index];
+  const historyNote = epaiGrade 
+    ? `${note ? note + ' ' : ''}[Penilaian Laporan: ${epaiGrade}]`
+    : (note || `Status diperbarui menjadi ${newStatus}`);
+
   const updatedHistory = [
     ...current.statusHistory,
     {
       status: newStatus,
       timestamp: new Date().toISOString(),
-      note: note || `Status diperbarui menjadi ${newStatus}`,
+      note: historyNote,
       officerName: officerName || 'Petugas Bimas Islam'
     }
   ];
@@ -383,7 +388,8 @@ export function updateSubmissionStatus(
     ...current,
     status: newStatus,
     officerNotes: note,
-    statusHistory: updatedHistory
+    statusHistory: updatedHistory,
+    ...(epaiGrade ? { epaiGrade } : {})
   };
 
   // 1. Update local cache
@@ -452,7 +458,7 @@ export function getServiceStatistics() {
   const surveys = getStoredSurveys();
 
   const total = submissions.length;
-  const approved = submissions.filter((s) => s.status === 'APPROVED').length;
+  const approved = submissions.filter((s) => s.status === 'APPROVED' || s.status === 'COMPLETED').length;
   const inProcess = submissions.filter(
     (s) => s.status === 'SUBMITTED' || s.status === 'VERIFYING' || s.status === 'REVIEW'
   ).length;

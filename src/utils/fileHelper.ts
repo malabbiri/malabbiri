@@ -28,7 +28,9 @@ export function getStatusLabelIndo(status: string | undefined): string {
     case 'REVIEW':
       return 'Proses Telaah / Pengukuran';
     case 'APPROVED':
-      return 'Disetujui & Diterbitkan';
+      return 'Disetujui';
+    case 'COMPLETED':
+      return 'Disetujui & Dokumen Diterbitkan';
     case 'REVISION_NEEDED':
       return 'Perlu Perbaikan Berkas';
     case 'REJECTED':
@@ -758,7 +760,6 @@ export async function downloadOfficialReceiptPdf(submission: SubmissionRecord): 
   // 3. Structured Information Box
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(leftMargin, 60, contentWidth, 68, 2, 2, 'FD');
 
   const rows = [
     { label: 'Jenis Layanan', value: submission.serviceTitle },
@@ -775,9 +776,12 @@ export async function downloadOfficialReceiptPdf(submission: SubmissionRecord): 
         year: 'numeric' 
       }) + ` pukul ${new Date(submission.submittedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WITA`
     },
-    { label: 'Status Dokumen', value: getStatusLabelIndo(submission.status) }
+    { label: 'Status Dokumen', value: getStatusLabelIndo(submission.status) },
+    ...(submission.epaiGrade ? [{ label: 'Penilaian Laporan (e-PAI)', value: `Predikat: ${submission.epaiGrade}` }] : [])
   ];
 
+  const infoBoxHeight = submission.epaiGrade ? 76 : 68;
+  doc.roundedRect(leftMargin, 60, contentWidth, infoBoxHeight, 2, 2, 'FD');
   let currentY = 67;
   rows.forEach((row) => {
     doc.setFont('helvetica', 'bold');

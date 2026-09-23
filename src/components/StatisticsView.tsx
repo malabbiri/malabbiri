@@ -24,7 +24,7 @@ export const StatisticsView: React.FC<StatisticsViewProps> = ({
   surveys
 }) => {
   const total = submissions.length;
-  const approved = submissions.filter(s => s.status === 'APPROVED').length;
+  const approved = submissions.filter(s => s.status === 'APPROVED' || s.status === 'COMPLETED').length;
   const inProcess = submissions.filter(s => ['SUBMITTED', 'VERIFYING', 'REVIEW'].includes(s.status)).length;
   const revision = submissions.filter(s => s.status === 'REVISION_NEEDED').length;
 

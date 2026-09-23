@@ -118,7 +118,7 @@ export default function App() {
   };
 
   const pendingCount = submissions.filter(s => s.status === 'SUBMITTED' || s.status === 'VERIFYING').length;
-  const approvedCount = submissions.filter(s => s.status === 'APPROVED').length;
+  const approvedCount = submissions.filter(s => s.status === 'APPROVED' || s.status === 'COMPLETED').length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-emerald-500 selection:text-white relative">

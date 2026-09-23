@@ -29,9 +29,10 @@ import {
   Trash2,
   Printer,
   Cloud,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Award
 } from 'lucide-react';
-import { SubmissionRecord, ApplicationStatus, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
+import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { formatIndoDate } from '../utils/date';
 import { updateSubmissionStatus, clearAllSubmissions, deleteSubmission } from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
@@ -67,8 +68,21 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [newStatus, setNewStatus] = useState<ApplicationStatus>('VERIFYING');
   const [officerNote, setOfficerNote] = useState('');
   const [officerName, setOfficerName] = useState(officer.name || 'Administrator Utama');
+  const [epaiGrade, setEpaiGrade] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
+
+  const isEpaiSubmission = (sub?: SubmissionRecord | null) => {
+    if (!sub) return false;
+    return (
+      sub.serviceId === 9 ||
+      sub.formData?.serviceCode === 'EPAI-PENYULUH' ||
+      (sub.serviceTitle && (
+        sub.serviceTitle.toLowerCase().includes('e-pai') ||
+        sub.serviceTitle.toLowerCase().includes('penyuluh')
+      ))
+    );
+  };
 
   // Document preview state
   const [viewingFile, setViewingFile] = useState<{
@@ -280,6 +294,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     setSelectedSubmission(sub);
     setNewStatus(sub.status || 'VERIFYING');
     setOfficerNote(sub.officerNotes || '');
+    setEpaiGrade(sub.epaiGrade || '');
     setSaveSuccessNotice(false);
   };
 
@@ -291,7 +306,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       selectedSubmission.id,
       newStatus,
       officerNote,
-      officerName
+      officerName,
+      isEpaiSubmission(selectedSubmission) ? (epaiGrade || undefined) : undefined
     );
 
     setTimeout(() => {
@@ -302,7 +318,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       if (updated) {
         setSelectedSubmission(updated);
         if (sendWA) {
-          const msg = generateStatusUpdateWAMessage(updated, newStatus, officerNote);
+          const msg = generateStatusUpdateWAMessage(
+            updated, 
+            newStatus, 
+            officerNote,
+            isEpaiSubmission(updated) ? (epaiGrade || undefined) : undefined
+          );
           openWhatsAppChat(updated.phone || '', msg);
         }
       }
@@ -334,7 +355,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   });
 
   const countPending = safeSubmissions.filter(s => s && (s.status === 'SUBMITTED' || s.status === 'VERIFYING')).length;
-  const countApproved = safeSubmissions.filter(s => s && s.status === 'APPROVED').length;
+  const countApproved = safeSubmissions.filter(s => s && (s.status === 'APPROVED' || s.status === 'COMPLETED')).length;
   const countRevision = safeSubmissions.filter(s => s && s.status === 'REVISION_NEEDED').length;
 
   const exportToCSV = () => {
@@ -343,14 +364,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         case 'SUBMITTED': return 'Diajukan / Berkas Masuk';
         case 'VERIFYING': return 'Sedang Diverifikasi';
         case 'REVIEW': return 'Proses Telaah / Pengukuran';
-        case 'APPROVED': return 'Disetujui & Dokumen Diterbitkan';
+        case 'APPROVED': return 'Disetujui';
+        case 'COMPLETED': return 'Disetujui & Dokumen Diterbitkan';
         case 'REVISION_NEEDED': return 'Perlu Perbaikan Berkas';
         case 'REJECTED': return 'Ditolak';
         default: return st;
       }
     };
 
-    const headers = ['No Tiket', 'Tanggal', 'Layanan', 'Nama Pemohon', 'Instansi', 'Kecamatan', 'No HP', 'Status', 'Catatan Petugas'];
+    const headers = ['No Tiket', 'Tanggal', 'Layanan', 'Nama Pemohon', 'Instansi', 'Kecamatan', 'No HP', 'Status', 'Penilaian e-PAI', 'Catatan Petugas'];
     const rows = filteredList.map(s => [
       `"${s.id || ''}"`,
       `"${s.submittedAt || ''}"`,
@@ -360,6 +382,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       `"${s.district || '-'}"`,
       `"${s.phone || ''}"`,
       `"${getStatusIndonesian(s.status || '')}"`,
+      `"${s.epaiGrade || '-'}"`,
       `"${s.officerNotes || '-'}"`
     ]);
 
@@ -541,7 +564,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               <option value="SUBMITTED">Diajukan (Baru)</option>
               <option value="VERIFYING">Sedang Diverifikasi</option>
               <option value="REVIEW">Proses Telaah / Pengukuran</option>
-              <option value="APPROVED">Disetujui & Selesai</option>
+              <option value="APPROVED">Disetujui</option>
+              <option value="COMPLETED">Disetujui & Dokumen Diterbitkan</option>
               <option value="REVISION_NEEDED">Perlu Revisi</option>
               <option value="REJECTED">Ditolak</option>
             </select>
@@ -633,6 +657,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                         Disetujui
                       </span>
                     )}
+                    {sub.status === 'COMPLETED' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                        Dokumen Terbit
+                      </span>
+                    )}
                     {sub.status === 'VERIFYING' && (
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                         Verifikasi
@@ -657,6 +686,23 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
                         Ditolak
                       </span>
+                    )}
+
+                    {sub.epaiGrade && (
+                      <div className="mt-1">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          sub.epaiGrade === 'Baik Sekali'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : sub.epaiGrade === 'Baik'
+                            ? 'bg-blue-50 text-blue-800 border-blue-300'
+                            : sub.epaiGrade === 'Cukup'
+                            ? 'bg-amber-50 text-amber-800 border-amber-300'
+                            : 'bg-rose-50 text-rose-800 border-rose-300'
+                        }`}>
+                          <Award className="w-3 h-3 flex-shrink-0" />
+                          <span>Nilai: {sub.epaiGrade}</span>
+                        </span>
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap text-right space-x-1.5">
@@ -883,7 +929,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       <option value="SUBMITTED">Diajukan / Berkas Masuk</option>
                       <option value="VERIFYING">Sedang Diverifikasi</option>
                       <option value="REVIEW">Proses Telaah / Pengukuran</option>
-                      <option value="APPROVED">Disetujui & Dokumen Diterbitkan</option>
+                      <option value="APPROVED">Disetujui</option>
+                      <option value="COMPLETED">Disetujui & Dokumen Diterbitkan</option>
                       <option value="REVISION_NEEDED">Perlu Perbaikan Berkas</option>
                       <option value="REJECTED">Ditolak</option>
                     </select>
@@ -900,6 +947,100 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                     />
                   </div>
+
+                  {/* Khusus Layanan Laporan e-PAI: Penilaian Evaluasi Laporan Bulanan Penyuluh */}
+                  {isEpaiSubmission(selectedSubmission) && (
+                    <div className="sm:col-span-2 p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200 shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Award className="w-4 h-4 text-emerald-700" />
+                          <label className="text-xs font-bold text-slate-900">
+                            Penilaian Laporan Bulanan Penyuluh (e-PAI):
+                          </label>
+                        </div>
+                        {epaiGrade && (
+                          <button
+                            type="button"
+                            onClick={() => setEpaiGrade('')}
+                            className="text-[10px] font-semibold text-slate-500 hover:text-rose-600 underline cursor-pointer"
+                          >
+                            Hapus Pilihan
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Pilih salah satu predikat penilaian evaluasi atas berkas laporan bulanan yang diverifikasi:
+                      </p>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          {
+                            grade: 'Baik Sekali',
+                            color: 'border-emerald-300 bg-white text-emerald-900',
+                            activeClass: 'ring-2 ring-emerald-600 bg-emerald-100/90 text-emerald-950 font-extrabold shadow-xs border-emerald-500',
+                            stars: '★★★★',
+                            desc: 'Sangat Memuaskan'
+                          },
+                          {
+                            grade: 'Baik',
+                            color: 'border-blue-300 bg-white text-blue-900',
+                            activeClass: 'ring-2 ring-blue-600 bg-blue-100/90 text-blue-950 font-extrabold shadow-xs border-blue-500',
+                            stars: '★★★',
+                            desc: 'Sesuai Standar'
+                          },
+                          {
+                            grade: 'Cukup',
+                            color: 'border-amber-300 bg-white text-amber-900',
+                            activeClass: 'ring-2 ring-amber-600 bg-amber-100/90 text-amber-950 font-extrabold shadow-xs border-amber-500',
+                            stars: '★★',
+                            desc: 'Cukup Memadai'
+                          },
+                          {
+                            grade: 'Kurang',
+                            color: 'border-rose-300 bg-white text-rose-900',
+                            activeClass: 'ring-2 ring-rose-600 bg-rose-100/90 text-rose-950 font-extrabold shadow-xs border-rose-500',
+                            stars: '★',
+                            desc: 'Perlu Peningkatan'
+                          }
+                        ].map((opt) => {
+                          const isSelected = epaiGrade === opt.grade;
+                          return (
+                            <button
+                              key={opt.grade}
+                              type="button"
+                              onClick={() => {
+                                setEpaiGrade(opt.grade);
+                                if (!officerNote) {
+                                  setOfficerNote(`Laporan bulanan e-PAI telah diverifikasi dan memperoleh predikat: ${opt.grade}.`);
+                                }
+                              }}
+                              className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                isSelected ? opt.activeClass : `${opt.color} hover:bg-slate-50`
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold">{opt.grade}</span>
+                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center text-[9px] font-bold ${
+                                  isSelected ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-slate-300 bg-slate-50 text-transparent'
+                                }`}>
+                                  ✓
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-amber-500 tracking-widest mt-1">{opt.stars}</span>
+                              <span className="text-[9px] text-slate-500 mt-0.5">{opt.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {epaiGrade && (
+                        <div className="text-[11px] font-semibold text-emerald-800 bg-white/90 p-2 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                          <span>Predikat Terpilih: <strong>{epaiGrade}</strong>. Hasil penilaian ini akan tersimpan ke sistem MALA'BIRI dan dikirim ke pemohon melalui WhatsApp.</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="sm:col-span-2 space-y-1">
                     <label className="text-xs font-semibold text-slate-800">
@@ -921,7 +1062,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     Format Pesan WhatsApp yang akan dikirim:
                   </span>
                   <p className="font-mono text-[10px] text-slate-700 line-clamp-3">
-                    {generateStatusUpdateWAMessage(selectedSubmission, newStatus, officerNote)}
+                    {generateStatusUpdateWAMessage(
+                      selectedSubmission, 
+                      newStatus, 
+                      officerNote,
+                      isEpaiSubmission(selectedSubmission) ? (epaiGrade || undefined) : undefined
+                    )}
                   </p>
                 </div>
 

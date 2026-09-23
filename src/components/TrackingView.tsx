@@ -17,7 +17,8 @@ import {
   User,
   Phone,
   Eye,
-  Download
+  Download,
+  Award
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, UploadedFileInfo } from '../types';
 import { formatIndoDate } from '../utils/date';
@@ -105,7 +106,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
         return (
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Selesai & Diterbitkan</span>
+            <span>Permohonan Disetujui</span>
+          </span>
+        );
+      case 'COMPLETED':
+        return (
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+            <span>Disetujui & Dokumen Diterbitkan</span>
           </span>
         );
       case 'REVISION_NEEDED':
@@ -125,12 +133,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
     }
   };
 
-  // 4-Stage Timeline Tracker
+  // 5-Stage Timeline Tracker
   const timelineStages = [
     { key: 'SUBMITTED', title: 'Permohonan Diterima', desc: 'Pendaftaran berkas online via MALA\'BIRI' },
     { key: 'VERIFYING', title: 'Verifikasi Berkas', desc: 'Pengecekan kelengkapan berkas & persyaratan' },
-    { key: 'REVIEW', title: 'Telaah & Pengukuran', desc: 'Validasi pimpinan / jadwal falakiyah lapangan' },
-    { key: 'APPROVED', title: 'Dokumen Diterbitkan', desc: 'Surat/SKT/Rekomendasi resmi siap digunakan' }
+    { key: 'REVIEW', title: 'Telaah / Pengukuran', desc: 'Proses telaah pimpinan / falakiyah lapangan' },
+    { key: 'APPROVED', title: 'Disetujui', desc: 'Berkas disetujui Seksi Bimas Islam' },
+    { key: 'COMPLETED', title: 'Dokumen Diterbitkan', desc: 'Surat/SKT/Rekomendasi resmi siap digunakan' }
   ];
 
   const getStageIndex = (status: ApplicationStatus): number => {
@@ -139,6 +148,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
       case 'VERIFYING': return 2;
       case 'REVIEW': return 3;
       case 'APPROVED': return 4;
+      case 'COMPLETED': return 5;
       case 'REVISION_NEEDED': return 2; // stops at verification
       case 'REJECTED': return 2;
       default: return 1;
@@ -269,14 +279,14 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
             </div>
           </div>
 
-          {/* 4-Stage Visual Timeline */}
+          {/* 5-Stage Visual Timeline */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-emerald-600" />
               <span>Tahapan Progres Dokumen</span>
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               {timelineStages.map((stage, idx) => {
                 const stageNumber = idx + 1;
                 const isCompleted = currentStageIndex > stageNumber;
@@ -287,7 +297,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                     key={stage.key}
                     className={`p-3.5 rounded-lg border transition-all ${
                       isCurrent
-                        ? 'bg-emerald-50/70 border-emerald-300'
+                        ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-500/20'
                         : isCompleted
                         ? 'bg-slate-50 border-slate-200'
                         : 'bg-white border-slate-200 opacity-60'
@@ -320,6 +330,51 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
               })}
             </div>
           </div>
+
+          {/* Khusus Hasil Penilaian Evaluasi Laporan e-PAI Penyuluh */}
+          {activeSubmission.epaiGrade && (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0 shadow-inner">
+                  <Award className="w-7 h-7 text-amber-300" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full text-emerald-100">
+                      Evaluasi Resmi e-PAI
+                    </span>
+                    <span className="text-xs text-emerald-100">Seksi Bimas Islam Kemenag Kab. Gowa</span>
+                  </div>
+                  <h4 className="text-base sm:text-lg font-extrabold mt-0.5">
+                    Hasil Penilaian Laporan Bulanan Penyuluh Agama Islam
+                  </h4>
+                  <p className="text-xs text-emerald-100/90">
+                    Laporan kinerja bulanan telah diverifikasi dan memperoleh predikat resmi dari verifikator.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white text-slate-900 px-5 py-3 rounded-xl shadow-md border border-emerald-100 flex flex-col items-center sm:items-end flex-shrink-0 self-stretch sm:self-auto text-center sm:text-right">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Predikat Penilaian
+                </span>
+                <span className={`text-xl font-black ${
+                  activeSubmission.epaiGrade === 'Baik Sekali'
+                    ? 'text-emerald-700'
+                    : activeSubmission.epaiGrade === 'Baik'
+                    ? 'text-blue-700'
+                    : activeSubmission.epaiGrade === 'Cukup'
+                    ? 'text-amber-700'
+                    : 'text-rose-700'
+                }`}>
+                  {activeSubmission.epaiGrade}
+                </span>
+                <span className="text-amber-500 text-xs tracking-widest font-mono">
+                  {activeSubmission.epaiGrade === 'Baik Sekali' ? '★★★★' : activeSubmission.epaiGrade === 'Baik' ? '★★★' : activeSubmission.epaiGrade === 'Cukup' ? '★★' : '★'}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Officer Notes if Revision Needed */}
           {activeSubmission.officerNotes && (
