@@ -9,7 +9,7 @@ import {
   deleteDoc 
 } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../lib/firebase';
-import { SubmissionRecord, SurveyRecord, ApplicationStatus } from '../types';
+import { SubmissionRecord, SurveyRecord, ApplicationStatus, UploadedFileInfo } from '../types';
 import { INITIAL_SUBMISSIONS, INITIAL_SURVEYS } from '../data/initialData';
 import { generateFileKey, storeFileInDb } from './indexedDbStorage';
 
@@ -410,6 +410,72 @@ export function updateSubmissionStatus(
       }
     }
   })();
+
+  return updatedRecord;
+}
+
+/**
+ * Resubmits revised files for an existing submission under the same Ticket Number.
+ * Changes status from REVISION_NEEDED back to VERIFYING without creating a new application.
+ */
+export async function resubmitSubmissionRevision(
+  id: string,
+  updatedFiles: UploadedFileInfo[],
+  applicantNote?: string
+): Promise<SubmissionRecord | null> {
+  const index = cachedSubmissions.findIndex((item) => item.id.toUpperCase() === id.toUpperCase());
+  if (index === -1) return null;
+
+  const current = cachedSubmissions[index];
+
+  // 1. Store any new file dataUrls into IndexedDB permanently
+  if (updatedFiles && updatedFiles.length > 0) {
+    updatedFiles.forEach((f) => {
+      if (f.dataUrl) {
+        storeFileInDb(generateFileKey(current.id, f.fileName, f.fieldName), f.dataUrl).catch((err) => {
+          console.warn('IndexedDB write error for revised file:', err);
+        });
+      }
+    });
+  }
+
+  const revisionNoteText = applicantNote?.trim()
+    ? `Pemohon telah mengunggah perbaikan berkas: "${applicantNote.trim()}". Berkas siap diverifikasi ulang.`
+    : 'Pemohon telah mengunggah perbaikan berkas yang diminta. Berkas siap diverifikasi ulang.';
+
+  const updatedHistory = [
+    ...current.statusHistory,
+    {
+      status: 'VERIFYING' as ApplicationStatus,
+      timestamp: new Date().toISOString(),
+      note: revisionNoteText,
+      officerName: 'Pemohon (Unggah Perbaikan)'
+    }
+  ];
+
+  const updatedRecord: SubmissionRecord = {
+    ...current,
+    files: updatedFiles,
+    status: 'VERIFYING',
+    statusHistory: updatedHistory
+  };
+
+  // 2. Update local cache & localStorage
+  cachedSubmissions[index] = updatedRecord;
+  saveSubmissions([...cachedSubmissions]);
+
+  // 3. Persist to Firestore cloud
+  try {
+    const safeData = sanitizeForFirestore(updatedRecord);
+    await setDoc(doc(db, 'submissions', updatedRecord.id), safeData, { merge: true });
+  } catch (err) {
+    console.error('Failed to update revised submission in Firestore:', err);
+    try {
+      handleFirestoreError(err, OperationType.UPDATE, `submissions/${updatedRecord.id}`);
+    } catch (e) {
+      // error logged
+    }
+  }
 
   return updatedRecord;
 }

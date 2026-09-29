@@ -75,6 +75,17 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   </button>
                 </form>
 
+                {/* Helpful Revision Notice Tip */}
+                <div className="p-2.5 rounded-lg bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 leading-snug">
+                  <span className="font-bold flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-600" />
+                    <span>Perlu Perbaikan Berkas?</span>
+                  </span>
+                  <p className="text-[10.5px] text-amber-800 mt-0.5">
+                    Cukup masukkan nomor tiket lama Anda di atas untuk mengunggah berkas revisi secara langsung tanpa perlu mendaftar baru.
+                  </p>
+                </div>
+
                 {/* Recent Submissions Track (Pastel Badges) */}
                 {recentSubmissions.length > 0 ? (
                   <div className="space-y-2 pt-1">

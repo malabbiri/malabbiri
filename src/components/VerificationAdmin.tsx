@@ -663,9 +663,19 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       </span>
                     )}
                     {sub.status === 'VERIFYING' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                        Verifikasi
-                      </span>
+                      <div className="space-y-1">
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          Verifikasi
+                        </span>
+                        {sub.statusHistory?.some(h => h.officerName === 'Pemohon (Unggah Perbaikan)') && (
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-100 text-cyan-900 border border-cyan-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-600 animate-pulse" />
+                              <span>Revisi Masuk</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     )}
                     {sub.status === 'REVIEW' && (
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
@@ -800,6 +810,28 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-2 animate-in fade-in">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0" />
                   <span className="font-semibold">Status dokumen berhasil diperbarui di sistem MALA'BIRI!</span>
+                </div>
+              )}
+
+              {/* Revision Uploaded Alert if applicant has resubmitted documents */}
+              {selectedSubmission.statusHistory?.some(h => h.officerName === 'Pemohon (Unggah Perbaikan)') && (
+                <div className="p-3.5 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-950 flex items-start gap-2.5 animate-in fade-in">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-0.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold uppercase tracking-wider text-cyan-950">
+                        Pemohon Telah Mengunggah Perbaikan Berkas
+                      </span>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-cyan-200 text-cyan-900 font-mono">
+                        Tiket Tetap: {selectedSubmission.id}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-cyan-900 leading-relaxed">
+                      Pemohon telah memperbaiki dokumen yang memiliki kekurangan tanpa perlu mendaftarkan permohonan baru. Silakan teliti lampiran berkas terbaru di bawah ini sebelum menetapkan status verifikasi.
+                    </p>
+                  </div>
                 </div>
               )}
 

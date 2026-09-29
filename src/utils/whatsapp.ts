@@ -78,7 +78,7 @@ export function generateStatusUpdateWAMessage(
   } else if (newStatus === 'COMPLETED') {
     actionAdvice = `\n🎉 *Alhamdulillah!* Dokumen/Rekomendasi resmi Anda telah diterbitkan. Anda dapat mengunduh bukti digital melalui portal MALA'BIRI atau mengambil berkas fisik di Kantor Kemenag Kab. Gowa (Senin-Kamis 07.30-16.00 WITA, Jumat 07.30-16.30 WITA).`;
   } else if (newStatus === 'REVISION_NEEDED') {
-    actionAdvice = `\n⚠️ *Perhatian:* Mohon lengkapi atau perbaiki berkas sesuai catatan petugas di atas, atau hubungi petugas kami untuk konfirmasi lebih lanjut.`;
+    actionAdvice = `\n⚠️ *Perhatian:* Terdapat berkas yang perlu perbaikan/dilengkapi sesuai catatan verifikator di atas.\n\n💡 *PENTING:* Anda *TIDAK PERLU* mendaftar permohonan baru! Nomor tiket Anda (*${submission.id}*) tetap berlaku. Silakan buka menu *Lacak Permohonan* pada portal MALA'BIRI, masukkan nomor tiket Anda, lalu unggah ulang berkas perbaikan langsung di formulir pelacakan untuk diverifikasi kembali oleh petugas.`;
   } else if (newStatus === 'REVIEW') {
     actionAdvice = `\nBerkas Anda telah lolos verifikasi awal dan saat ini dalam tahap telaah pimpinan atau pengukuran lapangan.`;
   }
@@ -117,3 +117,28 @@ export function openHotlineWhatsApp(inquiryContext?: string): void {
     : `Assalamu'alaikum, Halo Petugas Seksi Bimas Islam Kemenag Gowa, saya ingin bertanya seputar layanan MALA'BIRI...`;
   openWhatsAppChat(APP_INFO.phone, text);
 }
+
+export function generateRevisionConfirmationWAMessage(
+  submission: SubmissionRecord,
+  applicantNote?: string
+): string {
+  return `*KONFIRMASI PERBAIKAN BERKAS MALA'BIRI*
+_Seksi Bimas Islam Kemenag Kabupaten Gowa_
+------------------------------------------
+Assalamu'alaikum Wr. Wb.
+Kepada Yth. Petugas Verifikator Seksi Bimas Islam Kemenag Kab. Gowa,
+
+Saya pemohon layanan:
+📌 *No. Tiket Registrasi:* *${submission.id}*
+👤 *Nama Pemohon:* ${submission.applicantName}
+📋 *Layanan:* ${submission.serviceTitle}
+🏛 *Instansi/Lembaga:* ${submission.institutionName || '-'}
+📱 *No. HP/WA:* ${submission.phone}
+
+Menginformasikan bahwa saya telah selesai *mengunggah ulang berkas perbaikan* sesuai catatan verifikator melalui sistem MALA'BIRI.${applicantNote?.trim() ? `\n\n📝 *Catatan Perbaikan dari Pemohon:* \n"${applicantNote.trim()}"` : ''}
+
+Mohon kiranya berkas kami dapat diverifikasi kembali. Terima kasih banyak atas bimbingan dan pelayanannya.
+
+_Wassalamu'alaikum Wr. Wb._`;
+}
+
