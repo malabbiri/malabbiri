@@ -357,7 +357,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const openVerificationModal = (sub: SubmissionRecord) => {
     setSelectedSubmission(sub);
     setNewStatus(sub.status || 'VERIFYING');
-    setOfficerNote(cleanAndTidyNotes(sub.officerNotes || ''));
+    // Kosongkan catatan admin yang akan terkirim ke WA pemohon secara default
+    setOfficerNote('');
     setEpaiGrade(sub.epaiGrade || '');
     setSaveSuccessNotice(false);
   };
@@ -804,20 +805,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       {filesCount} file
                     </span>
                   </td>
-                  {/* Kolom Catatan yang Rapi ("rapikan catatannya") */}
+                  {/* Kolom Catatan Admin (Dikosongkan jika tidak ada catatan khusus) */}
                   <td className="px-4 py-3.5 max-w-[220px]">
-                    {(() => {
-                      const rawNote = sub.officerNotes || (sub.formData ? (sub.formData.notes || sub.formData.catatan || sub.formData.keterangan || '') : '');
-                      const tidy = cleanAndTidyNotes(rawNote);
-                      if (!tidy) {
-                        return <span className="text-slate-400 text-[11px] italic">-</span>;
-                      }
-                      return (
-                        <div className="text-[11px] text-slate-700 font-medium truncate max-w-[200px] bg-slate-50 px-2 py-1 rounded border border-slate-200" title={tidy}>
-                          {tidy}
-                        </div>
-                      );
-                    })()}
+                    {sub.officerNotes && sub.officerNotes.trim() && sub.officerNotes.trim() !== '-' ? (
+                      <div className="text-[11px] text-slate-700 font-medium truncate max-w-[200px] bg-slate-50 px-2 py-1 rounded border border-slate-200" title={sub.officerNotes}>
+                        {sub.officerNotes}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 text-[11px] italic">Kosong</span>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {sub.status === 'APPROVED' && (
@@ -903,11 +899,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
                     <button
                       onClick={() => {
-                        const msg = generateStatusUpdateWAMessage(sub, sub.status, sub.officerNotes);
+                        // Catatan admin dikosongkan untuk notifikasi WhatsApp pemohon
+                        const msg = generateStatusUpdateWAMessage(sub, sub.status, undefined);
                         openWhatsAppChat(sub.phone || '', msg);
                       }}
                       className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 inline-flex items-center transition-colors cursor-pointer"
-                      title="Kirim Notifikasi WhatsApp"
+                      title="Kirim Notifikasi WhatsApp (Catatan Admin Kosong)"
                     >
                       <MessageCircle className="w-3.5 h-3.5 fill-current" />
                     </button>
@@ -1336,14 +1333,29 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   )}
 
                   <div className="sm:col-span-2 space-y-1">
-                    <label className="text-xs font-semibold text-slate-800">
-                      Catatan / Keterangan Petugas (Ditampilkan ke Pemohon & WA):
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-800">
+                        Catatan Admin (Dikosongkan untuk WA Pemohon):
+                      </label>
+                      {officerNote ? (
+                        <button
+                          type="button"
+                          onClick={() => setOfficerNote('')}
+                          className="text-[11px] text-rose-600 hover:text-rose-700 font-medium underline cursor-pointer"
+                        >
+                          Kosongkan Catatan
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-emerald-700 font-medium">
+                          ✓ Dikosongkan (Pesan WA pemohon tidak menyertakan catatan)
+                        </span>
+                      )}
+                    </div>
                     <textarea
-                      rows={3}
+                      rows={2}
                       value={officerNote}
                       onChange={(e) => setOfficerNote(e.target.value)}
-                      placeholder="Contoh: Berkas persyaratan lengkap dan sesuai PMA 29/2019. SKT nomor B-1204 telah diterbitkan."
+                      placeholder="Dikosongkan secara default. Isi jika ada catatan khusus yang ingin dikirimkan ke WhatsApp pemohon..."
                       className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 resize-none font-medium focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                     />
                   </div>

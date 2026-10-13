@@ -334,7 +334,7 @@ export function convertRowsToSubmissions(rows: string[][]): {
         source: 'Google Drive / Google Sheet Import'
       },
       checklistConfirmed: [],
-      officerNotes: cleanNotes || undefined,
+      officerNotes: '',
       statusHistory: [
         {
           status,

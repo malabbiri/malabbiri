@@ -163,7 +163,7 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
                       <td className="px-3 py-2 font-bold text-emerald-800">Predikat: {submission.epaiGrade}</td>
                     </tr>
                   )}
-                  {submission.officerNotes && (
+                  {submission.officerNotes && submission.officerNotes.trim() && submission.officerNotes.trim() !== '-' && (
                     <tr>
                       <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Catatan Petugas</td>
                       <td className="px-3 py-2 text-slate-900 font-medium">{cleanAndTidyNotes(submission.officerNotes)}</td>

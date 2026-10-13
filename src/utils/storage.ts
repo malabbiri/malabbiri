@@ -97,14 +97,11 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     }
   }
 
-  // Tidy up notes ("rapikan catatannya")
-  let officerNotes = sub.officerNotes;
-  if (officerNotes) {
-    const tidy = cleanAndTidyNotes(officerNotes);
-    if (tidy !== officerNotes) {
-      officerNotes = tidy || undefined;
-      changed = true;
-    }
+  // Kosongkan catatan admin yang akan terkirim ke WA pemohon ("bukan dirapikan tapi kosongkan untuk catatan admin yang akan terkirim ke WA pemohon")
+  let officerNotes = '';
+  if (sub.officerNotes) {
+    officerNotes = '';
+    changed = true;
   }
 
   if (!changed) return sub;

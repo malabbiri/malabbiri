@@ -131,7 +131,7 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
               source: 'Google Apps Script Webhook Sync'
             },
             checklistConfirmed: [],
-            officerNotes: cleanAndTidyNotes(item.notes) || undefined,
+            officerNotes: '',
             statusHistory: [
               {
                 status: item.status || 'SUBMITTED',
@@ -296,7 +296,7 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
           source: 'Input Manual dari Google Drive oleh Petugas'
         },
         checklistConfirmed: [],
-        officerNotes: manualNotes.trim() ? `[Input dari Google Drive] ${manualNotes.trim()}` : '[Input dari Google Drive oleh Petugas]'
+        officerNotes: ''
       });
 
       setIsSaving(false);

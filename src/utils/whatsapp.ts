@@ -68,8 +68,8 @@ export function generateStatusUpdateWAMessage(
   }
 
   let noteSection = '';
-  if (officerNote) {
-    noteSection = `\n📝 *Catatan Petugas:* \n"${officerNote}"\n`;
+  if (officerNote && officerNote.trim() && officerNote.trim() !== '-') {
+    noteSection = `\n📝 *Catatan Petugas:* \n"${officerNote.trim()}"\n`;
   }
 
   let actionAdvice = '';
