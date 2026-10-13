@@ -16,6 +16,74 @@ import { generateFileKey, storeFileInDb } from './indexedDbStorage';
 const SUBMISSIONS_KEY = 'malabbiri_submissions_v3';
 const SURVEYS_KEY = 'malabbiri_surveys_v3';
 
+export function isTimestampOrDateString(str?: string): boolean {
+  if (!str) return false;
+  const s = str.trim();
+  if (/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/.test(s)) return true;
+  if (/\d{1,2}:\d{1,2}/.test(s) || /\d{1,2}\.\d{1,2}\.\d{1,2}/.test(s)) return true;
+  if (/wita|wib|wit|pukul|am|pm/i.test(s)) return true;
+  return false;
+}
+
+export function isLooksLikeServiceName(str?: string, serviceTitle?: string): boolean {
+  if (!str) return false;
+  const s = str.trim().toLowerCase();
+  if (serviceTitle && s === serviceTitle.trim().toLowerCase()) return true;
+  if (s.startsWith('laporan bulanan') || s.startsWith('layanan') || s.startsWith('permohonan') || s.startsWith('rekomendasi')) return true;
+  return false;
+}
+
+export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord {
+  let changed = false;
+  let applicantName = sub.applicantName;
+  let phone = sub.phone;
+
+  // Check if applicantName looks like a service title or is generic
+  if (isLooksLikeServiceName(applicantName, sub.serviceTitle) || !applicantName || applicantName === 'Pemohon Layanan') {
+    const candidate = (
+      sub.formData?.applicantName ||
+      sub.formData?.['Nama Lengkap Penyuluh'] ||
+      sub.formData?.['Nama Lengkap'] ||
+      sub.formData?.['Nama Pemohon'] ||
+      sub.formData?.nama ||
+      sub.formData?.['Nama Pengirim / Kepala KUA / Petugas'] ||
+      sub.formData?.penyuluhName ||
+      sub.formData?.name
+    );
+    if (candidate && !isLooksLikeServiceName(candidate, sub.serviceTitle)) {
+      applicantName = candidate;
+      changed = true;
+    }
+  }
+
+  // Check if phone looks like a date/timestamp
+  if (isTimestampOrDateString(phone)) {
+    const candidatePhone = (
+      sub.formData?.phone ||
+      sub.formData?.['No WhatsApp Aktif'] ||
+      sub.formData?.['No. WhatsApp / HP'] ||
+      sub.formData?.['No WhatsApp'] ||
+      sub.formData?.['No HP / WhatsApp Petugas KUA'] ||
+      sub.formData?.whatsapp ||
+      sub.formData?.noHp
+    );
+    if (candidatePhone && !isTimestampOrDateString(candidatePhone)) {
+      phone = candidatePhone;
+      changed = true;
+    } else {
+      phone = '-';
+      changed = true;
+    }
+  }
+
+  if (!changed) return sub;
+  return {
+    ...sub,
+    applicantName,
+    phone
+  };
+}
+
 // In-memory cache for synchronous render
 let cachedSubmissions: SubmissionRecord[] = [];
 let cachedSurveys: SurveyRecord[] = [];
@@ -30,7 +98,8 @@ try {
 
     const rawSubs = localStorage.getItem(SUBMISSIONS_KEY);
     if (rawSubs) {
-      cachedSubmissions = JSON.parse(rawSubs);
+      const parsed: SubmissionRecord[] = JSON.parse(rawSubs);
+      cachedSubmissions = parsed.map(repairSubmissionFields);
     } else {
       cachedSubmissions = [];
       localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify([]));
@@ -154,7 +223,7 @@ export function initFirestoreSync() {
             return rf;
           });
 
-          return { ...remoteSub, files: mergedFiles };
+          return repairSubmissionFields({ ...remoteSub, files: mergedFiles });
         });
 
         // Sort descending by submission time
@@ -575,11 +644,12 @@ export async function importOrSyncSubmissions(
   const currentMap = new Map<string, SubmissionRecord>();
   cachedSubmissions.forEach(s => currentMap.set(s.id.toUpperCase(), s));
 
-  for (const item of incomingSubmissions) {
-    if (!item.id) continue;
+  for (const rawItem of incomingSubmissions) {
+    if (!rawItem.id) continue;
+    const item = repairSubmissionFields(rawItem);
     const key = item.id.toUpperCase();
     if (currentMap.has(key)) {
-      // Data sudah ada: perbarui tautan berkas Google Drive jika sebelumnya belum lengkap
+      // Data sudah ada: perbarui tautan berkas Google Drive & perbaiki nama/telepon jika sebelumnya korup
       const existing = currentMap.get(key)!;
       const mergedFiles = [...(existing.files || [])];
       (item.files || []).forEach(nf => {
@@ -587,9 +657,23 @@ export async function importOrSyncSubmissions(
           mergedFiles.push(nf);
         }
       });
+
+      // Prioritize valid applicant name and phone
+      const finalName = (!isLooksLikeServiceName(item.applicantName, item.serviceTitle) && item.applicantName && item.applicantName !== 'Pemohon Layanan')
+        ? item.applicantName
+        : (!isLooksLikeServiceName(existing.applicantName, existing.serviceTitle) ? existing.applicantName : item.applicantName);
+
+      const finalPhone = (!isTimestampOrDateString(item.phone) && item.phone && item.phone !== '081234567890' && item.phone !== '-')
+        ? item.phone
+        : (!isTimestampOrDateString(existing.phone) && existing.phone !== '-' ? existing.phone : item.phone);
+
       const merged: SubmissionRecord = {
-        ...item,
         ...existing,
+        ...item,
+        applicantName: finalName || existing.applicantName,
+        phone: finalPhone || existing.phone,
+        status: existing.status || item.status, // preserve officer review status
+        statusHistory: existing.statusHistory && existing.statusHistory.length > 0 ? existing.statusHistory : item.statusHistory,
         files: mergedFiles
       };
       currentMap.set(key, merged);
@@ -624,3 +708,47 @@ export async function importOrSyncSubmissions(
 
   return { added, updated, total: resultList.length };
 }
+
+/**
+ * Memperbarui nama pemohon dan nomor telepon langsung dari Panel Verifikasi
+ */
+export async function updateSubmissionApplicant(
+  id: string,
+  applicantName: string,
+  phone: string,
+  district?: string,
+  institutionName?: string,
+  address?: string
+): Promise<SubmissionRecord | null> {
+  const index = cachedSubmissions.findIndex((item) => item.id.toUpperCase() === id.toUpperCase());
+  if (index === -1) return null;
+
+  const existing = cachedSubmissions[index];
+  const updated: SubmissionRecord = {
+    ...existing,
+    applicantName: applicantName.trim() || existing.applicantName,
+    phone: phone.trim() || existing.phone,
+    district: district !== undefined ? district : existing.district,
+    institutionName: institutionName !== undefined ? institutionName : existing.institutionName,
+    address: address !== undefined ? address : existing.address,
+    formData: {
+      ...(existing.formData || {}),
+      applicantName: applicantName.trim() || existing.applicantName,
+      phone: phone.trim() || existing.phone
+    }
+  };
+
+  cachedSubmissions[index] = updated;
+  saveSubmissions([...cachedSubmissions]);
+  notifySubmissionsListeners();
+
+  try {
+    const safeData = sanitizeForFirestore(updated);
+    await setDoc(doc(db, 'submissions', id), safeData, { merge: true });
+  } catch (err) {
+    console.error('Failed to update submission applicant in Firestore:', err);
+  }
+
+  return updated;
+}
+

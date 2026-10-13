@@ -30,11 +30,19 @@ import {
   Printer,
   Cloud,
   FileSpreadsheet,
-  Award
+  Award,
+  Edit2
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { formatIndoDate } from '../utils/date';
-import { updateSubmissionStatus, clearAllSubmissions, deleteSubmission } from '../utils/storage';
+import { 
+  updateSubmissionStatus, 
+  clearAllSubmissions, 
+  deleteSubmission, 
+  updateSubmissionApplicant, 
+  isTimestampOrDateString, 
+  isLooksLikeServiceName 
+} from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
@@ -102,6 +110,59 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       setIsGasConfigured(!!url);
     });
   }, [isGoogleDriveModalOpen, isSyncImportModalOpen]);
+
+  // Edit Applicant Details Modal state
+  const [editingApplicantSub, setEditingApplicantSub] = useState<SubmissionRecord | null>(null);
+  const [editNameInput, setEditNameInput] = useState('');
+  const [editPhoneInput, setEditPhoneInput] = useState('');
+  const [editDistrictInput, setEditDistrictInput] = useState('');
+  const [editInstitutionInput, setEditInstitutionInput] = useState('');
+  const [editAddressInput, setEditAddressInput] = useState('');
+  const [isSavingApplicant, setIsSavingApplicant] = useState(false);
+
+  const handleOpenEditApplicant = (sub: SubmissionRecord) => {
+    setEditingApplicantSub(sub);
+    const isBadName = isLooksLikeServiceName(sub.applicantName, sub.serviceTitle) || !sub.applicantName || sub.applicantName === 'Pemohon Layanan';
+    const isBadPhone = isTimestampOrDateString(sub.phone) || !sub.phone || sub.phone === '-';
+
+    const currentName = !isBadName
+      ? sub.applicantName
+      : (sub.formData?.applicantName || sub.formData?.['Nama Lengkap Penyuluh'] || sub.formData?.['Nama Lengkap'] || sub.formData?.nama || '');
+
+    const currentPhone = !isBadPhone
+      ? sub.phone
+      : (sub.formData?.phone || sub.formData?.['No WhatsApp Aktif'] || sub.formData?.['No. WhatsApp / HP'] || sub.formData?.whatsapp || sub.formData?.noHp || '');
+
+    setEditNameInput(currentName);
+    setEditPhoneInput(currentPhone);
+    setEditDistrictInput(sub.district || '');
+    setEditInstitutionInput(sub.institutionName || '');
+    setEditAddressInput(sub.address || '');
+  };
+
+  const handleSaveApplicant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingApplicantSub) return;
+    setIsSavingApplicant(true);
+    try {
+      const updated = await updateSubmissionApplicant(
+        editingApplicantSub.id,
+        editNameInput,
+        editPhoneInput,
+        editDistrictInput || undefined,
+        editInstitutionInput || undefined,
+        editAddressInput || undefined
+      );
+      if (updated && selectedSubmission?.id === updated.id) {
+        setSelectedSubmission(updated);
+      }
+      setEditingApplicantSub(null);
+    } catch (err) {
+      console.error('Error updating applicant:', err);
+    } finally {
+      setIsSavingApplicant(false);
+    }
+  };
 
   // Officer accounts management modal states
   const [isManageOfficersOpen, setIsManageOfficersOpen] = useState(false);
@@ -657,11 +718,60 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     {sub.serviceTitle || 'Layanan'}
                   </td>
                   <td className="px-4 py-3.5">
-                    <div className="font-bold text-slate-900 truncate max-w-[180px]">{sub.applicantName || '-'}</div>
-                    <div className="text-[11px] text-slate-500 font-mono font-medium">{sub.phone || '-'}</div>
-                    {sub.institutionName && (
-                      <div className="text-[11px] text-emerald-700 truncate max-w-[180px] font-medium">{sub.institutionName}</div>
-                    )}
+                    {(() => {
+                      const isBadName = isLooksLikeServiceName(sub.applicantName, sub.serviceTitle) || !sub.applicantName || sub.applicantName === 'Pemohon Layanan';
+                      const isBadPhone = isTimestampOrDateString(sub.phone) || !sub.phone || sub.phone === '-';
+                      
+                      const resolvedName = !isBadName
+                        ? sub.applicantName
+                        : (sub.formData?.applicantName || sub.formData?.['Nama Lengkap Penyuluh'] || sub.formData?.['Nama Lengkap'] || sub.formData?.nama || sub.applicantName || 'Pemohon Layanan');
+                      
+                      const resolvedPhone = !isBadPhone
+                        ? sub.phone
+                        : (sub.formData?.phone || sub.formData?.['No WhatsApp Aktif'] || sub.formData?.['No. WhatsApp / HP'] || sub.formData?.whatsapp || sub.formData?.noHp || (isTimestampOrDateString(sub.phone) ? '-' : sub.phone));
+
+                      const needsCorrection = isBadName || isBadPhone;
+
+                      return (
+                        <div className="group relative">
+                          <div className="flex items-start justify-between gap-1">
+                            <div className="font-bold text-slate-900 truncate max-w-[165px]" title={resolvedName}>
+                              {resolvedName || '-'}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditApplicant(sub);
+                              }}
+                              className="text-slate-400 hover:text-emerald-700 p-0.5 rounded hover:bg-slate-100 transition-colors"
+                              title="Koreksi / Lengkapi Nama & No. HP"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono font-medium flex items-center gap-1.5 flex-wrap">
+                            <span>{resolvedPhone || '-'}</span>
+                            {needsCorrection && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEditApplicant(sub);
+                                }}
+                                className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-sans hover:bg-amber-100 font-semibold"
+                                title="Klik untuk melengkapi nama dan nomor HP pemohon"
+                              >
+                                Koreksi
+                              </button>
+                            )}
+                          </div>
+                          {sub.institutionName && (
+                            <div className="text-[11px] text-emerald-700 truncate max-w-[180px] font-medium">{sub.institutionName}</div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap text-slate-700 font-medium">
                     {sub.district ? `Kec. ${sub.district}` : '-'}
@@ -869,17 +979,41 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
               {/* Applicant Info Banner */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-2">
-                <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                  Informasi Pemohon & Lokasi:
-                </h4>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                    Informasi Pemohon & Lokasi:
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditApplicant(selectedSubmission)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                  >
+                    <Edit2 className="w-3 h-3 text-emerald-700" />
+                    <span>Koreksi Data Pemohon</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
                     <span className="text-slate-500 font-medium block">Nama Pemohon:</span>
-                    <strong className="text-slate-900 text-sm font-semibold">{selectedSubmission.applicantName}</strong>
+                    <strong className="text-slate-900 text-sm font-semibold">
+                      {(() => {
+                        const isBadName = isLooksLikeServiceName(selectedSubmission.applicantName, selectedSubmission.serviceTitle) || !selectedSubmission.applicantName || selectedSubmission.applicantName === 'Pemohon Layanan';
+                        return !isBadName
+                          ? selectedSubmission.applicantName
+                          : (selectedSubmission.formData?.applicantName || selectedSubmission.formData?.['Nama Lengkap Penyuluh'] || selectedSubmission.formData?.['Nama Lengkap'] || selectedSubmission.formData?.nama || selectedSubmission.applicantName || 'Pemohon Layanan');
+                      })()}
+                    </strong>
                   </div>
                   <div>
                     <span className="text-slate-500 font-medium block">Nomor HP/WA:</span>
-                    <strong className="text-emerald-700 font-mono text-sm">{selectedSubmission.phone}</strong>
+                    <strong className="text-emerald-700 font-mono text-sm">
+                      {(() => {
+                        const isBadPhone = isTimestampOrDateString(selectedSubmission.phone) || !selectedSubmission.phone || selectedSubmission.phone === '-';
+                        return !isBadPhone
+                          ? selectedSubmission.phone
+                          : (selectedSubmission.formData?.phone || selectedSubmission.formData?.['No WhatsApp Aktif'] || selectedSubmission.formData?.['No. WhatsApp / HP'] || selectedSubmission.formData?.whatsapp || selectedSubmission.formData?.noHp || '-');
+                      })()}
+                    </strong>
                   </div>
                   <div>
                     <span className="text-slate-500 font-medium block">Kecamatan:</span>
@@ -1408,6 +1542,142 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           alert(`Sukses! Sebanyak ${count} data permohonan dari Google Drive & Sheets telah berhasil dimasukkan ke Panel Verifikasi.`);
         }}
       />
+
+      {/* EDIT APPLICANT DETAILS MODAL */}
+      {editingApplicantSub && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg bg-white rounded-xl overflow-hidden border border-slate-200 shadow-2xl">
+            <div className="bg-emerald-700 px-6 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center gap-2.5">
+                <Edit2 className="w-5 h-5 text-emerald-200" />
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Koreksi Data Pemohon: {editingApplicantSub.id}
+                  </h3>
+                  <p className="text-[11px] text-emerald-100 font-medium">
+                    {editingApplicantSub.serviceTitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingApplicantSub(null)}
+                className="p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-emerald-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveApplicant} className="p-6 space-y-4 text-xs">
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] leading-relaxed">
+                Silakan masukkan <strong>Nama Lengkap Pemohon / Penyuluh</strong> dan <strong>Nomor WhatsApp/HP Aktif</strong> yang sebenarnya. Data ini akan langsung disimpan dan tersinkronisasi ke server.
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5 text-xs">
+                  Nama Lengkap Pemohon / Penyuluh <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editNameInput}
+                  onChange={(e) => setEditNameInput(e.target.value)}
+                  placeholder="Contoh: MUHAMMAD AMIN, S.Ag atau IRMA RAHMAYANI"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5 text-xs">
+                  Nomor WhatsApp / HP Pemohon <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editPhoneInput}
+                  onChange={(e) => setEditPhoneInput(e.target.value)}
+                  placeholder="Contoh: 082188458264"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5 text-xs">
+                    Kecamatan / Tempat Tugas
+                  </label>
+                  <select
+                    value={editDistrictInput}
+                    onChange={(e) => setEditDistrictInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs"
+                  >
+                    <option value="">-- Pilih Kecamatan --</option>
+                    {GOWA_DISTRICTS.map((dist) => (
+                      <option key={dist} value={dist}>
+                        Kec. {dist}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5 text-xs">
+                    Lembaga / Instansi / KUA
+                  </label>
+                  <input
+                    type="text"
+                    value={editInstitutionInput}
+                    onChange={(e) => setEditInstitutionInput(e.target.value)}
+                    placeholder="Contoh: KUA Kec. PARIGI"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5 text-xs">
+                  Alamat Lengkap (Opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={editAddressInput}
+                  onChange={(e) => setEditAddressInput(e.target.value)}
+                  placeholder="Alamat domisili atau kantor..."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xs"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingApplicantSub(null)}
+                  disabled={isSavingApplicant}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingApplicant || !editNameInput.trim()}
+                  className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                >
+                  {isSavingApplicant ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Simpan Perubahan</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

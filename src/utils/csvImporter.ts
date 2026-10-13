@@ -149,12 +149,40 @@ export function convertRowsToSubmissions(rows: string[][]): {
   const rawHeaders = rows[0];
   const headers = rawHeaders.map(h => (h || '').toString().toLowerCase().trim());
 
-  // Find column indexes
+  // Helper to test if a string looks like an Indonesian phone number
+  const isPhonePattern = (val: string) => {
+    const clean = val.replace(/[\s\-\'\.]/g, '');
+    return /^(08|\+?628)\d{7,12}$/.test(clean) || (/^\d{9,14}$/.test(clean) && !val.includes('/') && !val.includes(':'));
+  };
+
+  // Helper to test if a string looks like a date/timestamp
+  const isDatePattern = (val: string) => {
+    return /\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/.test(val) || /\d{1,2}:\d{1,2}/.test(val) || /\d{1,2}\.\d{1,2}\.\d{1,2}/.test(val);
+  };
+
+  // Find column indexes strictly
   const idxTimestamp = headers.findIndex(h => h.includes('waktu') || h.includes('timestamp') || h.includes('tanggal'));
   const idxId = headers.findIndex(h => h.includes('tiket') || h.includes('kode') || (h.includes('id') && !h.includes('masjid')));
-  const idxService = headers.findIndex(h => h.includes('layanan') || h.includes('jenis permohonan') || h.includes('kategori'));
-  const idxName = headers.findIndex(h => h.includes('pemohon') || h.includes('nama lengkap') || h.includes('nama'));
-  const idxPhone = headers.findIndex(h => h.includes('wa') || h.includes('telepon') || h.includes('whatsapp') || h.includes('hp') || h.includes('kontak'));
+  
+  // Service index: must not be applicant name
+  const idxService = headers.findIndex(h => (h.includes('layanan') || h.includes('jenis permohonan') || h.includes('kategori')) && !h.includes('pemohon'));
+  
+  // Name index: MUST NOT match "nama layanan", "nama file", "nama berkas", "nama lembaga", "nama masjid"
+  let idxName = headers.findIndex(h => {
+    const isExcluded = h.includes('layanan') || h.includes('file') || h.includes('berkas') || h.includes('dokumen') || h.includes('lembaga') || h.includes('masjid') || h.includes('kua');
+    if (isExcluded) return false;
+    return h.includes('pemohon') || h.includes('nama lengkap') || h.includes('nama penyuluh') || h.includes('nama pengirim') || h.includes('nama pendaftar') || h === 'nama';
+  });
+  if (idxName === -1) {
+    idxName = headers.findIndex(h => h.includes('nama') && !h.includes('layanan') && !h.includes('file') && !h.includes('berkas') && !h.includes('lembaga') && !h.includes('masjid'));
+  }
+
+  // Phone index: MUST NOT match "waktu", "waktu pengajuan"
+  const idxPhone = headers.findIndex(h => {
+    if (h.includes('waktu') || h.includes('tanggal')) return false;
+    return h.includes('whatsapp') || h.includes('telepon') || h.includes('kontak') || h.includes('hp') || /(?:^|[^a-z])wa(?:[^a-z]|$)/i.test(h);
+  });
+
   const idxEmail = headers.findIndex(h => h.includes('email') || h.includes('pos-el'));
   const idxDistrict = headers.findIndex(h => h.includes('kecamatan') || h.includes('wilayah'));
   const idxAddress = headers.findIndex(h => h.includes('alamat') || h.includes('lokasi'));
@@ -172,9 +200,45 @@ export function convertRowsToSubmissions(rows: string[][]): {
       continue;
     }
 
-    const rawName = idxName >= 0 ? (row[idxName] || '').trim() : '';
-    const rawPhone = idxPhone >= 0 ? (row[idxPhone] || '').trim().replace(/^'/, '') : '';
+    let rawName = idxName >= 0 ? (row[idxName] || '').trim() : '';
+    let rawPhone = idxPhone >= 0 ? (row[idxPhone] || '').trim().replace(/^'/, '') : '';
     const rawService = idxService >= 0 ? (row[idxService] || '').trim() : '';
+
+    // Smart row-level value repair:
+    // If rawPhone looks like a timestamp/date, scan other row columns to find a true phone number
+    if (isDatePattern(rawPhone)) {
+      rawPhone = '';
+      for (let c = 0; c < row.length; c++) {
+        const cell = (row[c] || '').trim().replace(/^'/, '');
+        if (isPhonePattern(cell)) {
+          rawPhone = cell;
+          break;
+        }
+      }
+    }
+
+    // If rawName looks like a service title, scan row columns to find a person's name
+    if (rawName && (rawName.toLowerCase().startsWith('laporan bulanan') || rawName.toLowerCase().startsWith('layanan') || rawName.toLowerCase() === rawService.toLowerCase())) {
+      for (let c = 0; c < row.length; c++) {
+        if (c === idxService || c === idxTimestamp) continue;
+        const cell = (row[c] || '').trim();
+        // Candidate person name: 3-50 chars, letters/spaces/punctuation, not a phone/date/url
+        if (
+          cell.length >= 3 && 
+          cell.length <= 60 && 
+          !isPhonePattern(cell) && 
+          !isDatePattern(cell) && 
+          !cell.startsWith('http') && 
+          !cell.toLowerCase().startsWith('laporan') &&
+          !cell.toLowerCase().startsWith('layanan') &&
+          !cell.toLowerCase().startsWith('kec.') &&
+          !/^\d+$/.test(cell)
+        ) {
+          rawName = cell;
+          break;
+        }
+      }
+    }
 
     // If row has no name and no service, skip
     if (!rawName && !rawService) {

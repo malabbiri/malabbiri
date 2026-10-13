@@ -227,9 +227,29 @@ function getSubmissionsFromSheet() {
 
     var idxTime = headers.findIndex(function(h) { return h.indexOf("waktu") > -1 || h.indexOf("timestamp") > -1 || h.indexOf("tanggal") > -1; });
     var idxId = headers.findIndex(function(h) { return h.indexOf("tiket") > -1 || (h.indexOf("id") > -1 && h.indexOf("masjid") === -1); });
-    var idxService = headers.findIndex(function(h) { return h.indexOf("layanan") > -1; });
-    var idxName = headers.findIndex(function(h) { return h.indexOf("pemohon") > -1 || h.indexOf("nama") > -1; });
-    var idxPhone = headers.findIndex(function(h) { return h.indexOf("wa") > -1 || h.indexOf("hp") > -1 || h.indexOf("telepon") > -1 || h.indexOf("kontak") > -1; });
+    
+    // Service index
+    var idxService = headers.findIndex(function(h) { return (h.indexOf("layanan") > -1 || h.indexOf("jenis") > -1) && h.indexOf("pemohon") === -1; });
+    
+    // Name index: MUST NOT match "nama layanan", "nama file", "nama berkas", "nama lembaga", "nama masjid"
+    var idxName = headers.findIndex(function(h) {
+      if (h.indexOf("layanan") > -1 || h.indexOf("file") > -1 || h.indexOf("berkas") > -1 || h.indexOf("dokumen") > -1 || h.indexOf("lembaga") > -1 || h.indexOf("masjid") > -1 || h.indexOf("kua") > -1) {
+        return false;
+      }
+      return h.indexOf("pemohon") > -1 || h.indexOf("nama lengkap") > -1 || h.indexOf("nama penyuluh") > -1 || h.indexOf("nama pengirim") > -1 || h.indexOf("nama pendaftar") > -1 || h === "nama";
+    });
+    if (idxName === -1) {
+      idxName = headers.findIndex(function(h) {
+        return h.indexOf("nama") > -1 && h.indexOf("layanan") === -1 && h.indexOf("file") === -1 && h.indexOf("berkas") === -1 && h.indexOf("lembaga") === -1 && h.indexOf("masjid") === -1;
+      });
+    }
+
+    // Phone index: MUST NOT match "waktu", "waktu pengajuan"
+    var idxPhone = headers.findIndex(function(h) {
+      if (h.indexOf("waktu") > -1 || h.indexOf("tanggal") > -1) return false;
+      return h.indexOf("whatsapp") > -1 || h.indexOf("telepon") > -1 || h.indexOf("kontak") > -1 || h.indexOf("hp") > -1 || /(?:^|[^a-z])wa(?:[^a-z]|$)/.test(h);
+    });
+
     var idxEmail = headers.findIndex(function(h) { return h.indexOf("email") > -1; });
     var idxDistrict = headers.findIndex(function(h) { return h.indexOf("kecamatan") > -1; });
     var idxAddress = headers.findIndex(function(h) { return h.indexOf("alamat") > -1; });
@@ -243,9 +263,47 @@ function getSubmissionsFromSheet() {
       var row = values[r];
       var name = idxName > -1 ? (row[idxName] || "").toString().trim() : "";
       var service = idxService > -1 ? (row[idxService] || "").toString().trim() : "";
+      var rawPhone = idxPhone > -1 ? (row[idxPhone] || "").toString().trim().replace(/^'/, "") : "";
+
+      // Phone validator & repair: If rawPhone has date pattern, search row for true phone number
+      var isDateLike = /\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/.test(rawPhone) || /\d{1,2}:\d{1,2}/.test(rawPhone) || /\d{1,2}\.\d{1,2}\.\d{1,2}/.test(rawPhone);
+      if (isDateLike) {
+        rawPhone = "";
+        for (var c = 0; c < row.length; c++) {
+          var cellVal = (row[c] || "").toString().trim().replace(/^'/, "");
+          var cleanNum = cellVal.replace(/[\s\-\'\.]/g, "");
+          if ((/^(08|\+?628)\d{7,12}$/.test(cleanNum) || (/^\d{9,14}$/.test(cleanNum) && cellVal.indexOf("/") === -1 && cellVal.indexOf(":") === -1))) {
+            rawPhone = cellVal;
+            break;
+          }
+        }
+      }
+
+      // Name validator & repair: If name looks like service title, search row for person's name
+      var isNameServiceLike = name && (name.toLowerCase().indexOf("laporan bulanan") === 0 || name.toLowerCase().indexOf("layanan") === 0 || (service && name.toLowerCase() === service.toLowerCase()));
+      if (isNameServiceLike) {
+        for (var c2 = 0; c2 < row.length; c2++) {
+          if (c2 === idxService || c2 === idxTime) continue;
+          var candCell = (row[c2] || "").toString().trim();
+          if (
+            candCell.length >= 3 && 
+            candCell.length <= 60 && 
+            candCell.indexOf("/") === -1 && 
+            candCell.indexOf(":") === -1 && 
+            candCell.indexOf("http") === -1 && 
+            candCell.toLowerCase().indexOf("laporan") === -1 &&
+            candCell.toLowerCase().indexOf("layanan") === -1 &&
+            candCell.toLowerCase().indexOf("kec.") === -1 &&
+            !/^\d+$/.test(candCell)
+          ) {
+            name = candCell;
+            break;
+          }
+        }
+      }
+
       if (!name && !service) continue;
 
-      var rawPhone = idxPhone > -1 ? (row[idxPhone] || "").toString().trim().replace(/^'/, "") : "";
       var rawTime = idxTime > -1 ? row[idxTime] : "";
       var timeIso = "";
       try {
