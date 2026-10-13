@@ -47,7 +47,7 @@ import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsa
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
 import { getGoogleAppsScriptUrl, sendSubmissionToGoogleSheetViaScript } from '../utils/googleAppsScript';
-import { resolveAutoKuaName, cleanAndTidyNotes, getParsedNotesKeyValues } from '../utils/notesHelper';
+import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';
 import { GoogleDriveSyncImportModal } from './GoogleDriveSyncImportModal';
@@ -705,7 +705,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 <th className="px-4 py-3.5 text-slate-700">Pemohon & Kontak</th>
                 <th className="px-4 py-3.5 text-slate-700">KUA Kecamatan</th>
                 <th className="px-4 py-3.5 text-slate-700">Berkas</th>
-                <th className="px-4 py-3.5 text-slate-700">Catatan</th>
                 <th className="px-4 py-3.5 text-slate-700">Status</th>
                 <th className="px-4 py-3.5 text-right text-slate-700">Aksi</th>
               </tr>
@@ -804,16 +803,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       <FileText className="w-3 h-3 text-emerald-700" />
                       {filesCount} file
                     </span>
-                  </td>
-                  {/* Kolom Catatan Admin (Dikosongkan jika tidak ada catatan khusus) */}
-                  <td className="px-4 py-3.5 max-w-[220px]">
-                    {sub.officerNotes && sub.officerNotes.trim() && sub.officerNotes.trim() !== '-' ? (
-                      <div className="text-[11px] text-slate-700 font-medium truncate max-w-[200px] bg-slate-50 px-2 py-1 rounded border border-slate-200" title={sub.officerNotes}>
-                        {sub.officerNotes}
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 text-[11px] italic">Kosong</span>
-                    )}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {sub.status === 'APPROVED' && (
@@ -1069,39 +1058,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 </div>
               </div>
 
-              {/* Tidy Notes Section ("rapikan catatannya") */}
-              {(() => {
-                const rawNotes = selectedSubmission.officerNotes || (selectedSubmission.formData ? (selectedSubmission.formData.notes || selectedSubmission.formData.catatan || selectedSubmission.formData.keterangan || '') : '');
-                const keyValues = getParsedNotesKeyValues(rawNotes);
-                const cleanText = cleanAndTidyNotes(rawNotes);
-                if (!cleanText && keyValues.length === 0) return null;
 
-                return (
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
-                    <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
-                      <FileText className="w-4 h-4 text-emerald-700" />
-                      <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">
-                        Catatan & Keterangan Pengajuan
-                      </h4>
-                    </div>
-
-                    {keyValues.length > 1 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        {keyValues.map((kv, i) => (
-                          <div key={i} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                            <span className="text-[10px] uppercase font-bold text-slate-500 block">{kv.key}:</span>
-                            <span className="font-semibold text-slate-800 text-xs">{kv.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800 leading-relaxed font-medium">
-                        {cleanText}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
 
               {/* Uploaded Documents Preview & Download */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
