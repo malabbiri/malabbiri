@@ -12,6 +12,7 @@ import { db, OperationType, handleFirestoreError } from '../lib/firebase';
 import { SubmissionRecord, SurveyRecord, ApplicationStatus, UploadedFileInfo } from '../types';
 import { INITIAL_SUBMISSIONS, INITIAL_SURVEYS } from '../data/initialData';
 import { generateFileKey, storeFileInDb } from './indexedDbStorage';
+import { resolveAutoKuaName, cleanAndTidyNotes } from './notesHelper';
 
 const SUBMISSIONS_KEY = 'malabbiri_submissions_v3';
 const SURVEYS_KEY = 'malabbiri_surveys_v3';
@@ -47,18 +48,13 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     }
   }
 
-  // Auto-fill KUA institutionName if missing or '-'
-  let institutionName = sub.institutionName;
-  if (!institutionName || institutionName.trim() === '-' || institutionName.trim() === '') {
-    if (district) {
-      institutionName = `KUA Kec. ${district}`;
-      changed = true;
-    } else {
-      institutionName = undefined;
-    }
+  // Auto-fill KUA institutionName automatically ("yang tanda centang buat otomatis tertulis nama KUA nya")
+  let institutionName = resolveAutoKuaName(district, sub.institutionName);
+  if (institutionName !== sub.institutionName) {
+    changed = true;
   }
 
-  // Check if applicantName looks like a service title or is generic
+  // Check if applicantName looks like a service title or is generic ("yang tanda dalam kotak dihapus")
   if (isLooksLikeServiceName(applicantName, sub.serviceTitle) || !applicantName || applicantName === 'Pemohon Layanan') {
     const candidate = (
       sub.formData?.applicantName ||
@@ -70,8 +66,12 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
       sub.formData?.penyuluhName ||
       sub.formData?.name
     );
-    if (candidate && !isLooksLikeServiceName(candidate, sub.serviceTitle)) {
-      applicantName = candidate;
+    if (candidate && !isLooksLikeServiceName(candidate, sub.serviceTitle) && candidate.trim() !== '-') {
+      applicantName = candidate.trim();
+      changed = true;
+    } else {
+      // Hapus teks judul layanan yang salah masuk ke kotak nama pemohon
+      applicantName = '-';
       changed = true;
     }
   }
@@ -89,10 +89,20 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
       sub.formData?.noHp
     );
     if (candidatePhone && /\d/.test(candidatePhone) && !isTimestampOrDateString(candidatePhone)) {
-      phone = candidatePhone;
+      phone = candidatePhone.trim();
       changed = true;
     } else {
       phone = '-';
+      changed = true;
+    }
+  }
+
+  // Tidy up notes ("rapikan catatannya")
+  let officerNotes = sub.officerNotes;
+  if (officerNotes) {
+    const tidy = cleanAndTidyNotes(officerNotes);
+    if (tidy !== officerNotes) {
+      officerNotes = tidy || undefined;
       changed = true;
     }
   }
@@ -103,7 +113,8 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     applicantName,
     phone,
     district: district || sub.district,
-    institutionName
+    institutionName,
+    officerNotes
   };
 }
 

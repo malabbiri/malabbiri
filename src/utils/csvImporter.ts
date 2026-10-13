@@ -1,6 +1,7 @@
 import { SubmissionRecord, ApplicationStatus, UploadedFileInfo } from '../types';
 import { SERVICES_LIST } from '../data/services';
 import { generateSubmissionId } from './storage';
+import { resolveAutoKuaName, cleanAndTidyNotes } from './notesHelper';
 
 /**
  * Robust CSV parser that handles quotes, escaped quotes, multiline values, and commas/semicolons
@@ -296,35 +297,40 @@ export function convertRowsToSubmissions(rows: string[][]): {
     else if (rawStatus.includes('TELAAH') || rawStatus === 'REVIEW') status = 'REVIEW';
     else if (rawStatus.includes('TOLAK') || rawStatus === 'REJECTED') status = 'REJECTED';
 
-    const cleanDistrict = idxDistrict >= 0 ? (row[idxDistrict] || '').trim() : '';
+    const cleanDistrict = idxDistrict >= 0 ? (row[idxDistrict] || '').trim().replace(/^Kec\.?\s*/i, '') : '';
     const cleanAddress = idxAddress >= 0 ? (row[idxAddress] || '').trim() : (cleanDistrict ? `Kecamatan ${cleanDistrict}` : 'Kabupaten Gowa');
     const rawInst = idxInstitution >= 0 ? (row[idxInstitution] || '').trim() : '';
-    const cleanInst = (rawInst && rawInst !== '-')
-      ? rawInst
-      : (cleanDistrict ? `KUA Kec. ${cleanDistrict}` : undefined);
-    const cleanNotes = idxNotes >= 0 ? (row[idxNotes] || '').trim() : '';
+    const cleanInst = resolveAutoKuaName(cleanDistrict, rawInst);
+    const rawNotes = idxNotes >= 0 ? (row[idxNotes] || '').trim() : '';
+    const cleanNotes = cleanAndTidyNotes(rawNotes);
+
+    // If applicantName looks like service name or is generic, do not leave it corrupted
+    const cleanApplicantName = (rawName && !rawName.toLowerCase().startsWith('laporan') && !rawName.toLowerCase().startsWith('layanan') && rawName !== serviceInfo.title)
+      ? rawName
+      : '-';
 
     const rec: SubmissionRecord = {
       id: submissionId,
       verificationCode: `VRF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       serviceId: serviceInfo.id,
       serviceTitle: serviceInfo.title,
-      applicantName: rawName || 'Pemohon Layanan',
-      phone: rawPhone || '081234567890',
+      applicantName: cleanApplicantName,
+      phone: rawPhone || '-',
       email: idxEmail >= 0 ? (row[idxEmail] || '').trim() : undefined,
       district: cleanDistrict || undefined,
       address: cleanAddress,
-      institutionName: cleanInst,
+      institutionName: cleanInst !== '-' ? cleanInst : undefined,
       status,
       submittedAt,
       files,
       formData: {
-        applicantName: rawName || 'Pemohon Layanan',
-        phone: rawPhone || '081234567890',
+        applicantName: cleanApplicantName !== '-' ? cleanApplicantName : undefined,
+        phone: rawPhone && rawPhone !== '-' ? rawPhone : undefined,
         district: cleanDistrict,
         address: cleanAddress,
-        institutionName: cleanInst,
+        institutionName: cleanInst !== '-' ? cleanInst : undefined,
         serviceTitle: serviceInfo.title,
+        notes: cleanNotes || undefined,
         source: 'Google Drive / Google Sheet Import'
       },
       checklistConfirmed: [],

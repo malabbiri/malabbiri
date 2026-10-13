@@ -21,7 +21,8 @@ import { SubmissionRecord, GOWA_DISTRICTS } from '../types';
 import { SERVICES_LIST } from '../data/services';
 import { parseCSV, convertRowsToSubmissions } from '../utils/csvImporter';
 import { getGoogleAppsScriptUrl, fetchSubmissionsFromGoogleSheetViaScript } from '../utils/googleAppsScript';
-import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission } from '../utils/storage';
+import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission, isLooksLikeServiceName } from '../utils/storage';
+import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
 
 interface GoogleDriveSyncImportModalProps {
   isOpen: boolean;
@@ -108,30 +109,29 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
             verificationCode: `VRF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
             serviceId: serviceObj.id,
             serviceTitle: item.serviceTitle || serviceObj.title,
-            applicantName: item.applicantName || 'Pemohon Layanan',
-            phone: item.phone || '081234567890',
+            applicantName: (item.applicantName && !isLooksLikeServiceName(item.applicantName, item.serviceTitle) && item.applicantName !== 'Pemohon Layanan')
+              ? item.applicantName
+              : '-',
+            phone: item.phone && item.phone !== '-' ? item.phone : '-',
             email: item.email || undefined,
             district: item.district || undefined,
             address: item.address || (item.district ? `Kecamatan ${item.district}` : 'Kabupaten Gowa'),
-            institutionName: (item.institutionName && item.institutionName !== '-')
-              ? item.institutionName
-              : (item.district ? `KUA Kec. ${item.district.replace(/^Kec\.?\s*/i, '').trim()}` : undefined),
+            institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
             status: item.status || 'SUBMITTED',
             submittedAt: item.submittedAt || new Date().toISOString(),
             files,
             formData: {
-              applicantName: item.applicantName || 'Pemohon Layanan',
-              phone: item.phone || '081234567890',
+              applicantName: (item.applicantName && !isLooksLikeServiceName(item.applicantName, item.serviceTitle) && item.applicantName !== 'Pemohon Layanan') ? item.applicantName : undefined,
+              phone: item.phone && item.phone !== '-' ? item.phone : undefined,
               district: item.district,
               address: item.address,
-              institutionName: (item.institutionName && item.institutionName !== '-')
-                ? item.institutionName
-                : (item.district ? `KUA Kec. ${item.district.replace(/^Kec\.?\s*/i, '').trim()}` : undefined),
+              institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
               serviceTitle: item.serviceTitle || serviceObj.title,
+              notes: cleanAndTidyNotes(item.notes) || undefined,
               source: 'Google Apps Script Webhook Sync'
             },
             checklistConfirmed: [],
-            officerNotes: item.notes || undefined,
+            officerNotes: cleanAndTidyNotes(item.notes) || undefined,
             statusHistory: [
               {
                 status: item.status || 'SUBMITTED',

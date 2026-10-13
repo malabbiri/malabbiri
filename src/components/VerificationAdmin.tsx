@@ -47,6 +47,7 @@ import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsa
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
 import { getGoogleAppsScriptUrl, sendSubmissionToGoogleSheetViaScript } from '../utils/googleAppsScript';
+import { resolveAutoKuaName, cleanAndTidyNotes, getParsedNotesKeyValues } from '../utils/notesHelper';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';
 import { GoogleDriveSyncImportModal } from './GoogleDriveSyncImportModal';
@@ -356,7 +357,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const openVerificationModal = (sub: SubmissionRecord) => {
     setSelectedSubmission(sub);
     setNewStatus(sub.status || 'VERIFYING');
-    setOfficerNote(sub.officerNotes || '');
+    setOfficerNote(cleanAndTidyNotes(sub.officerNotes || ''));
     setEpaiGrade(sub.epaiGrade || '');
     setSaveSuccessNotice(false);
   };
@@ -435,19 +436,23 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       }
     };
 
-    const headers = ['No Tiket', 'Tanggal', 'Layanan', 'Nama Pemohon', 'Instansi', 'Kecamatan', 'No HP', 'Status', 'Penilaian e-PAI', 'Catatan Petugas'];
-    const rows = filteredList.map(s => [
-      `"${s.id || ''}"`,
-      `"${s.submittedAt || ''}"`,
-      `"${s.serviceTitle || ''}"`,
-      `"${s.applicantName || ''}"`,
-      `"${s.institutionName || '-'}"`,
-      `"${s.district || '-'}"`,
-      `"${s.phone || ''}"`,
-      `"${getStatusIndonesian(s.status || '')}"`,
-      `"${s.epaiGrade || '-'}"`,
-      `"${s.officerNotes || '-'}"`
-    ]);
+    const headers = ['No Tiket', 'Tanggal', 'Layanan', 'Nama Pemohon', 'KUA Kecamatan', 'No HP', 'Status', 'Penilaian e-PAI', 'Catatan Petugas'];
+    const rows = filteredList.map(s => {
+      const autoKua = resolveAutoKuaName(s.district, s.institutionName);
+      const isBad = isLooksLikeServiceName(s.applicantName, s.serviceTitle) || !s.applicantName || s.applicantName === 'Pemohon Layanan';
+      const cleanName = !isBad ? s.applicantName : (s.formData?.applicantName || '-');
+      return [
+        `"${s.id || ''}"`,
+        `"${s.submittedAt || ''}"`,
+        `"${s.serviceTitle || ''}"`,
+        `"${cleanName}"`,
+        `"${autoKua}"`,
+        `"${s.phone || ''}"`,
+        `"${getStatusIndonesian(s.status || '')}"`,
+        `"${s.epaiGrade || '-'}"`,
+        `"${cleanAndTidyNotes(s.officerNotes) || '-'}"`
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -696,9 +701,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 <th className="px-4 py-3.5 text-slate-700">ID Tiket</th>
                 <th className="px-4 py-3.5 text-slate-700">Tanggal</th>
                 <th className="px-4 py-3.5 text-slate-700">Layanan</th>
-                <th className="px-4 py-3.5 text-slate-700">Pemohon & Lembaga</th>
-                <th className="px-4 py-3.5 text-slate-700">Kecamatan</th>
+                <th className="px-4 py-3.5 text-slate-700">Pemohon & Kontak</th>
+                <th className="px-4 py-3.5 text-slate-700">KUA Kecamatan</th>
                 <th className="px-4 py-3.5 text-slate-700">Berkas</th>
+                <th className="px-4 py-3.5 text-slate-700">Catatan</th>
                 <th className="px-4 py-3.5 text-slate-700">Status</th>
                 <th className="px-4 py-3.5 text-right text-slate-700">Aksi</th>
               </tr>
@@ -714,17 +720,22 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   <td className="px-4 py-3.5 whitespace-nowrap text-slate-500 text-[11px] font-medium">
                     {sub.submittedAt ? formatIndoDate(sub.submittedAt) : '-'}
                   </td>
-                  <td className="px-4 py-3.5 font-semibold text-slate-900 max-w-[200px] truncate">
+                  <td className="px-4 py-3.5 font-semibold text-slate-900 max-w-[200px] truncate" title={sub.serviceTitle}>
                     {sub.serviceTitle || 'Layanan'}
                   </td>
                   <td className="px-4 py-3.5">
                     {(() => {
+                      // Hapus judul layanan yang salah masuk ke kotak nama pemohon ("yang tanda dalam kotak dihapus")
                       const isBadName = isLooksLikeServiceName(sub.applicantName, sub.serviceTitle) || !sub.applicantName || sub.applicantName === 'Pemohon Layanan';
-                      const resolvedName = !isBadName
-                        ? sub.applicantName
-                        : (sub.formData?.applicantName || sub.formData?.['Nama Lengkap Penyuluh'] || sub.formData?.['Nama Lengkap'] || sub.formData?.nama || sub.applicantName || 'Pemohon Layanan');
+                      const candidateName = isBadName
+                        ? (sub.formData?.applicantName || sub.formData?.['Nama Lengkap Penyuluh'] || sub.formData?.['Nama Lengkap'] || sub.formData?.['Nama Pemohon'] || sub.formData?.nama)
+                        : sub.applicantName;
 
-                      // Phone resolution: must have digits and not be same as applicant name
+                      const resolvedName = (candidateName && !isLooksLikeServiceName(candidateName, sub.serviceTitle) && candidateName.trim() !== '-')
+                        ? candidateName.trim()
+                        : '';
+
+                      // Phone resolution: must have digits and not be same as applicant name or timestamp
                       const isCandidateValid = (val?: string) => {
                         if (!val) return false;
                         const s = val.trim();
@@ -740,6 +751,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                           sub.formData?.phone,
                           sub.formData?.['No WhatsApp Aktif'],
                           sub.formData?.['No. WhatsApp / HP'],
+                          sub.formData?.['No WhatsApp'],
+                          sub.formData?.['No HP / WhatsApp Petugas KUA'],
                           sub.formData?.whatsapp,
                           sub.formData?.noHp
                         ];
@@ -747,43 +760,64 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                         resolvedPhone = found || '-';
                       }
 
-                      // Auto-resolve KUA name from institutionName or district
-                      const dist = sub.district || sub.formData?.district || sub.formData?.['Tempat Tugas (Kecamatan)'] || sub.formData?.kecamatan;
-                      const cleanDist = dist ? dist.replace(/^Kec\.?\s*/i, '').trim() : '';
-
-                      let kuaName = (sub.institutionName && sub.institutionName.trim() !== '-')
-                        ? sub.institutionName
-                        : (cleanDist ? `KUA Kec. ${cleanDist}` : '');
-
-                      if (!kuaName && cleanDist) {
-                        kuaName = `KUA Kec. ${cleanDist}`;
-                      }
-
                       return (
                         <div className="space-y-0.5">
-                          <div className="font-bold text-slate-900 truncate max-w-[180px]" title={resolvedName}>
-                            {resolvedName || '-'}
-                          </div>
+                          {resolvedName ? (
+                            <div className="font-bold text-slate-900 truncate max-w-[180px]" title={resolvedName}>
+                              {resolvedName}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditApplicant(sub)}
+                              className="text-[11px] text-amber-700 hover:text-amber-800 font-semibold underline decoration-dashed flex items-center gap-1 cursor-pointer"
+                              title="Klik untuk mengisi data nama pemohon"
+                            >
+                              <span>(Belum ada nama)</span>
+                            </button>
+                          )}
                           <div className="text-[11px] text-slate-500 font-mono font-medium">
                             {resolvedPhone || '-'}
                           </div>
-                          {kuaName && kuaName !== '-' && (
-                            <div className="text-[11px] text-emerald-700 truncate max-w-[180px] font-medium">
-                              {kuaName}
-                            </div>
-                          )}
                         </div>
                       );
                     })()}
                   </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-slate-700 font-medium">
-                    {sub.district ? `Kec. ${sub.district}` : '-'}
+                  {/* Kolom KUA Kecamatan: Otomatis tertulis nama KUA-nya ("yang tanda centang buat otomatis tertulis nama KUA nya") */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    {(() => {
+                      const autoKua = resolveAutoKuaName(sub.district, sub.institutionName);
+                      if (!autoKua || autoKua === '-') {
+                        return <span className="text-slate-400 text-[11px] font-medium">-</span>;
+                      }
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-2xs">
+                          <Building className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
+                          <span>{autoKua}</span>
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                       <FileText className="w-3 h-3 text-emerald-700" />
                       {filesCount} file
                     </span>
+                  </td>
+                  {/* Kolom Catatan yang Rapi ("rapikan catatannya") */}
+                  <td className="px-4 py-3.5 max-w-[220px]">
+                    {(() => {
+                      const rawNote = sub.officerNotes || (sub.formData ? (sub.formData.notes || sub.formData.catatan || sub.formData.keterangan || '') : '');
+                      const tidy = cleanAndTidyNotes(rawNote);
+                      if (!tidy) {
+                        return <span className="text-slate-400 text-[11px] italic">-</span>;
+                      }
+                      return (
+                        <div className="text-[11px] text-slate-700 font-medium truncate max-w-[200px] bg-slate-50 px-2 py-1 rounded border border-slate-200" title={tidy}>
+                          {tidy}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {sub.status === 'APPROVED' && (
@@ -1001,9 +1035,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     <strong className="text-slate-900 text-sm font-semibold">
                       {(() => {
                         const isBadName = isLooksLikeServiceName(selectedSubmission.applicantName, selectedSubmission.serviceTitle) || !selectedSubmission.applicantName || selectedSubmission.applicantName === 'Pemohon Layanan';
-                        return !isBadName
-                          ? selectedSubmission.applicantName
-                          : (selectedSubmission.formData?.applicantName || selectedSubmission.formData?.['Nama Lengkap Penyuluh'] || selectedSubmission.formData?.['Nama Lengkap'] || selectedSubmission.formData?.nama || selectedSubmission.applicantName || 'Pemohon Layanan');
+                        const candidate = (selectedSubmission.formData?.applicantName || selectedSubmission.formData?.['Nama Lengkap Penyuluh'] || selectedSubmission.formData?.['Nama Lengkap'] || selectedSubmission.formData?.nama);
+                        if (!isBadName) return selectedSubmission.applicantName;
+                        if (candidate && !isLooksLikeServiceName(candidate, selectedSubmission.serviceTitle) && candidate.trim() !== '-') return candidate.trim();
+                        return '-';
                       })()}
                     </strong>
                   </div>
@@ -1022,7 +1057,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     <span className="text-slate-500 font-medium block">Kecamatan:</span>
                     <strong className="text-slate-900">{selectedSubmission.district || '-'}</strong>
                   </div>
-                  <div className="sm:col-span-2">
+                  <div>
+                    <span className="text-slate-500 font-medium block">KUA Instansi:</span>
+                    <strong className="text-emerald-800 font-bold">{resolveAutoKuaName(selectedSubmission.district, selectedSubmission.institutionName)}</strong>
+                  </div>
+                  <div>
                     <span className="text-slate-500 font-medium block">Alamat:</span>
                     <p className="text-slate-800 font-medium">{selectedSubmission.address || '-'}</p>
                   </div>
@@ -1032,6 +1071,40 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Tidy Notes Section ("rapikan catatannya") */}
+              {(() => {
+                const rawNotes = selectedSubmission.officerNotes || (selectedSubmission.formData ? (selectedSubmission.formData.notes || selectedSubmission.formData.catatan || selectedSubmission.formData.keterangan || '') : '');
+                const keyValues = getParsedNotesKeyValues(rawNotes);
+                const cleanText = cleanAndTidyNotes(rawNotes);
+                if (!cleanText && keyValues.length === 0) return null;
+
+                return (
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
+                    <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
+                      <FileText className="w-4 h-4 text-emerald-700" />
+                      <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">
+                        Catatan & Keterangan Pengajuan
+                      </h4>
+                    </div>
+
+                    {keyValues.length > 1 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        {keyValues.map((kv, i) => (
+                          <div key={i} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 block">{kv.key}:</span>
+                            <span className="font-semibold text-slate-800 text-xs">{kv.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800 leading-relaxed font-medium">
+                        {cleanText}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Uploaded Documents Preview & Download */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">

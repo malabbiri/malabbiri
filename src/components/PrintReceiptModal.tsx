@@ -4,6 +4,8 @@ import { SubmissionRecord } from '../types';
 import { formatIndoDate } from '../utils/date';
 import { OfficialLetterhead } from './OfficialLetterhead';
 import { downloadOfficialReceiptPdf, getStatusLabelIndo } from '../utils/fileHelper';
+import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
+import { isLooksLikeServiceName } from '../utils/storage';
 
 interface PrintReceiptModalProps {
   submission: SubmissionRecord;
@@ -116,41 +118,55 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
                     <td className="px-3 py-2 font-bold text-slate-900">{submission.serviceTitle}</td>
                   </tr>
                   <tr className="border-b border-slate-300">
-                    <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Nama Pemohon</td>
-                    <td className="px-3 py-2 font-bold text-slate-900">{submission.applicantName}</td>
+                    <td className="w-44 px-3 py-2 font-semibold bg-slate-100 text-slate-800">Nama Pemohon</td>
+                    <td className="px-3 py-2 font-bold text-slate-900">
+                      {(() => {
+                        const isBad = isLooksLikeServiceName(submission.applicantName, submission.serviceTitle) || !submission.applicantName || submission.applicantName === 'Pemohon Layanan';
+                        const candidate = submission.formData?.applicantName || submission.formData?.['Nama Lengkap Penyuluh'] || submission.formData?.['Nama Lengkap'];
+                        if (!isBad) return submission.applicantName;
+                        if (candidate && !isLooksLikeServiceName(candidate, submission.serviceTitle)) return candidate;
+                        return '-';
+                      })()}
+                    </td>
                   </tr>
                   <tr className="border-b border-slate-300">
-                    <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Nomor WhatsApp / HP</td>
+                    <td className="w-44 px-3 py-2 font-semibold bg-slate-100 text-slate-800">Nomor WhatsApp / HP</td>
                     <td className="px-3 py-2 font-mono text-slate-900">{submission.phone}</td>
                   </tr>
-                  {submission.institutionName && (
-                    <tr className="border-b border-slate-300">
-                      <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Nama Lembaga / Masjid</td>
-                      <td className="px-3 py-2 text-slate-900 font-medium">{submission.institutionName}</td>
-                    </tr>
-                  )}
+                  <tr className="border-b border-slate-300">
+                    <td className="w-44 px-3 py-2 font-semibold bg-slate-100 text-slate-800">Lembaga / KUA</td>
+                    <td className="px-3 py-2 text-slate-900 font-bold text-emerald-800">
+                      {resolveAutoKuaName(submission.district, submission.institutionName)}
+                    </td>
+                  </tr>
                   {submission.district && (
                     <tr className="border-b border-slate-300">
-                      <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Kecamatan Domisili</td>
+                      <td className="w-44 px-3 py-2 font-semibold bg-slate-100 text-slate-800">Kecamatan Domisili</td>
                       <td className="px-3 py-2 text-slate-900 font-medium">Kecamatan {submission.district}</td>
                     </tr>
                   )}
                   <tr className="border-b border-slate-300">
-                    <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Alamat Lengkap</td>
+                    <td className="w-44 px-3 py-2 font-semibold bg-slate-100 text-slate-800">Alamat Lengkap</td>
                     <td className="px-3 py-2 text-slate-900">{submission.address}</td>
                   </tr>
                   <tr className="border-b border-slate-300">
-                    <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Waktu Pengajuan</td>
+                    <td className="w-44 px-3 py-2 font-semibold bg-slate-100 text-slate-800">Waktu Pengajuan</td>
                     <td className="px-3 py-2 text-slate-900">{formatIndoDate(submission.submittedAt)}</td>
                   </tr>
-                  <tr className={submission.epaiGrade ? "border-b border-slate-300" : ""}>
-                    <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Status Permohonan</td>
+                  <tr className={submission.epaiGrade || submission.officerNotes ? "border-b border-slate-300" : ""}>
+                    <td className="w-44 px-3 py-2 font-semibold bg-slate-100 text-slate-800">Status Permohonan</td>
                     <td className="px-3 py-2 font-bold text-emerald-800">{getStatusLabelIndo(submission.status)}</td>
                   </tr>
                   {submission.epaiGrade && (
-                    <tr>
+                    <tr className={submission.officerNotes ? "border-b border-slate-300" : ""}>
                       <td className="px-3 py-2 font-semibold bg-emerald-50 text-emerald-900">Hasil Penilaian (e-PAI)</td>
                       <td className="px-3 py-2 font-bold text-emerald-800">Predikat: {submission.epaiGrade}</td>
+                    </tr>
+                  )}
+                  {submission.officerNotes && (
+                    <tr>
+                      <td className="px-3 py-2 font-semibold bg-slate-100 text-slate-800">Catatan Petugas</td>
+                      <td className="px-3 py-2 text-slate-900 font-medium">{cleanAndTidyNotes(submission.officerNotes)}</td>
                     </tr>
                   )}
                 </tbody>
@@ -186,7 +202,13 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
               <div className="space-y-12">
                 <p className="font-medium text-slate-800">Pemohon,</p>
                 <p className="font-bold border-t border-slate-400 pt-1 text-slate-950">
-                  ( {submission.applicantName} )
+                  ( {(() => {
+                    const isBad = isLooksLikeServiceName(submission.applicantName, submission.serviceTitle) || !submission.applicantName || submission.applicantName === 'Pemohon Layanan';
+                    const candidate = submission.formData?.applicantName || submission.formData?.['Nama Lengkap Penyuluh'] || submission.formData?.['Nama Lengkap'];
+                    if (!isBad) return submission.applicantName;
+                    if (candidate && !isLooksLikeServiceName(candidate, submission.serviceTitle)) return candidate;
+                    return 'Pemohon';
+                  })()} )
                 </p>
               </div>
 
