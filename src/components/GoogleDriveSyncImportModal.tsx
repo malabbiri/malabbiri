@@ -113,7 +113,9 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
             email: item.email || undefined,
             district: item.district || undefined,
             address: item.address || (item.district ? `Kecamatan ${item.district}` : 'Kabupaten Gowa'),
-            institutionName: item.institutionName || undefined,
+            institutionName: (item.institutionName && item.institutionName !== '-')
+              ? item.institutionName
+              : (item.district ? `KUA Kec. ${item.district.replace(/^Kec\.?\s*/i, '').trim()}` : undefined),
             status: item.status || 'SUBMITTED',
             submittedAt: item.submittedAt || new Date().toISOString(),
             files,
@@ -122,7 +124,9 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
               phone: item.phone || '081234567890',
               district: item.district,
               address: item.address,
-              institutionName: item.institutionName,
+              institutionName: (item.institutionName && item.institutionName !== '-')
+                ? item.institutionName
+                : (item.district ? `KUA Kec. ${item.district.replace(/^Kec\.?\s*/i, '').trim()}` : undefined),
               serviceTitle: item.serviceTitle || serviceObj.title,
               source: 'Google Apps Script Webhook Sync'
             },

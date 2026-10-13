@@ -38,6 +38,26 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
   let applicantName = sub.applicantName;
   let phone = sub.phone;
 
+  // Resolve district
+  let district = sub.district || sub.formData?.district || sub.formData?.['Tempat Tugas (Kecamatan)'] || sub.formData?.kecamatan;
+  if (district) {
+    district = district.replace(/^Kec\.?\s*/i, '').trim();
+    if (district !== sub.district) {
+      changed = true;
+    }
+  }
+
+  // Auto-fill KUA institutionName if missing or '-'
+  let institutionName = sub.institutionName;
+  if (!institutionName || institutionName.trim() === '-' || institutionName.trim() === '') {
+    if (district) {
+      institutionName = `KUA Kec. ${district}`;
+      changed = true;
+    } else {
+      institutionName = undefined;
+    }
+  }
+
   // Check if applicantName looks like a service title or is generic
   if (isLooksLikeServiceName(applicantName, sub.serviceTitle) || !applicantName || applicantName === 'Pemohon Layanan') {
     const candidate = (
@@ -56,8 +76,9 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     }
   }
 
-  // Check if phone looks like a date/timestamp
-  if (isTimestampOrDateString(phone)) {
+  // Check if phone has no digits or looks like date/timestamp or equals applicantName
+  const hasDigits = /\d/.test(phone || '');
+  if (!hasDigits || isTimestampOrDateString(phone) || (applicantName && phone.trim().toLowerCase() === applicantName.trim().toLowerCase())) {
     const candidatePhone = (
       sub.formData?.phone ||
       sub.formData?.['No WhatsApp Aktif'] ||
@@ -67,7 +88,7 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
       sub.formData?.whatsapp ||
       sub.formData?.noHp
     );
-    if (candidatePhone && !isTimestampOrDateString(candidatePhone)) {
+    if (candidatePhone && /\d/.test(candidatePhone) && !isTimestampOrDateString(candidatePhone)) {
       phone = candidatePhone;
       changed = true;
     } else {
@@ -80,7 +101,9 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
   return {
     ...sub,
     applicantName,
-    phone
+    phone,
+    district: district || sub.district,
+    institutionName
   };
 }
 

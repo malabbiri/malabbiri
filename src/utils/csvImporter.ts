@@ -298,7 +298,10 @@ export function convertRowsToSubmissions(rows: string[][]): {
 
     const cleanDistrict = idxDistrict >= 0 ? (row[idxDistrict] || '').trim() : '';
     const cleanAddress = idxAddress >= 0 ? (row[idxAddress] || '').trim() : (cleanDistrict ? `Kecamatan ${cleanDistrict}` : 'Kabupaten Gowa');
-    const cleanInst = idxInstitution >= 0 ? (row[idxInstitution] || '').trim() : '';
+    const rawInst = idxInstitution >= 0 ? (row[idxInstitution] || '').trim() : '';
+    const cleanInst = (rawInst && rawInst !== '-')
+      ? rawInst
+      : (cleanDistrict ? `KUA Kec. ${cleanDistrict}` : undefined);
     const cleanNotes = idxNotes >= 0 ? (row[idxNotes] || '').trim() : '';
 
     const rec: SubmissionRecord = {
@@ -311,7 +314,7 @@ export function convertRowsToSubmissions(rows: string[][]): {
       email: idxEmail >= 0 ? (row[idxEmail] || '').trim() : undefined,
       district: cleanDistrict || undefined,
       address: cleanAddress,
-      institutionName: cleanInst || undefined,
+      institutionName: cleanInst,
       status,
       submittedAt,
       files,

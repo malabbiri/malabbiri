@@ -720,54 +720,57 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   <td className="px-4 py-3.5">
                     {(() => {
                       const isBadName = isLooksLikeServiceName(sub.applicantName, sub.serviceTitle) || !sub.applicantName || sub.applicantName === 'Pemohon Layanan';
-                      const isBadPhone = isTimestampOrDateString(sub.phone) || !sub.phone || sub.phone === '-';
-                      
                       const resolvedName = !isBadName
                         ? sub.applicantName
                         : (sub.formData?.applicantName || sub.formData?.['Nama Lengkap Penyuluh'] || sub.formData?.['Nama Lengkap'] || sub.formData?.nama || sub.applicantName || 'Pemohon Layanan');
-                      
-                      const resolvedPhone = !isBadPhone
-                        ? sub.phone
-                        : (sub.formData?.phone || sub.formData?.['No WhatsApp Aktif'] || sub.formData?.['No. WhatsApp / HP'] || sub.formData?.whatsapp || sub.formData?.noHp || (isTimestampOrDateString(sub.phone) ? '-' : sub.phone));
 
-                      const needsCorrection = isBadName || isBadPhone;
+                      // Phone resolution: must have digits and not be same as applicant name
+                      const isCandidateValid = (val?: string) => {
+                        if (!val) return false;
+                        const s = val.trim();
+                        if (s === '-' || isTimestampOrDateString(s)) return false;
+                        if (!/\d/.test(s)) return false;
+                        if (resolvedName && s.toLowerCase() === resolvedName.toLowerCase()) return false;
+                        return true;
+                      };
+
+                      let resolvedPhone = isCandidateValid(sub.phone) ? sub.phone : '';
+                      if (!resolvedPhone) {
+                        const candidates = [
+                          sub.formData?.phone,
+                          sub.formData?.['No WhatsApp Aktif'],
+                          sub.formData?.['No. WhatsApp / HP'],
+                          sub.formData?.whatsapp,
+                          sub.formData?.noHp
+                        ];
+                        const found = candidates.find(isCandidateValid);
+                        resolvedPhone = found || '-';
+                      }
+
+                      // Auto-resolve KUA name from institutionName or district
+                      const dist = sub.district || sub.formData?.district || sub.formData?.['Tempat Tugas (Kecamatan)'] || sub.formData?.kecamatan;
+                      const cleanDist = dist ? dist.replace(/^Kec\.?\s*/i, '').trim() : '';
+
+                      let kuaName = (sub.institutionName && sub.institutionName.trim() !== '-')
+                        ? sub.institutionName
+                        : (cleanDist ? `KUA Kec. ${cleanDist}` : '');
+
+                      if (!kuaName && cleanDist) {
+                        kuaName = `KUA Kec. ${cleanDist}`;
+                      }
 
                       return (
-                        <div className="group relative">
-                          <div className="flex items-start justify-between gap-1">
-                            <div className="font-bold text-slate-900 truncate max-w-[165px]" title={resolvedName}>
-                              {resolvedName || '-'}
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-slate-900 truncate max-w-[180px]" title={resolvedName}>
+                            {resolvedName || '-'}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono font-medium">
+                            {resolvedPhone || '-'}
+                          </div>
+                          {kuaName && kuaName !== '-' && (
+                            <div className="text-[11px] text-emerald-700 truncate max-w-[180px] font-medium">
+                              {kuaName}
                             </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenEditApplicant(sub);
-                              }}
-                              className="text-slate-400 hover:text-emerald-700 p-0.5 rounded hover:bg-slate-100 transition-colors"
-                              title="Koreksi / Lengkapi Nama & No. HP"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                          <div className="text-[11px] text-slate-500 font-mono font-medium flex items-center gap-1.5 flex-wrap">
-                            <span>{resolvedPhone || '-'}</span>
-                            {needsCorrection && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenEditApplicant(sub);
-                                }}
-                                className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-sans hover:bg-amber-100 font-semibold"
-                                title="Klik untuk melengkapi nama dan nomor HP pemohon"
-                              >
-                                Koreksi
-                              </button>
-                            )}
-                          </div>
-                          {sub.institutionName && (
-                            <div className="text-[11px] text-emerald-700 truncate max-w-[180px] font-medium">{sub.institutionName}</div>
                           )}
                         </div>
                       );

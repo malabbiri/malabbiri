@@ -312,6 +312,11 @@ function getSubmissionsFromSheet() {
         timeIso = new Date().toISOString();
       }
 
+      var rawDist = idxDistrict > -1 ? (row[idxDistrict] || "").toString().trim() : "";
+      var cleanDist = rawDist ? rawDist.replace(/^kec\.?\s*/i, "").trim() : "";
+      var rawInst = idxInst > -1 ? (row[idxInst] || "").toString().trim() : "";
+      var autoInst = (rawInst && rawInst !== "-") ? rawInst : (cleanDist ? ("KUA Kec. " + cleanDist) : "");
+
       list.push({
         id: idxId > -1 && row[idxId] ? (row[idxId] || "").toString().trim() : "",
         submittedAt: timeIso,
@@ -319,9 +324,9 @@ function getSubmissionsFromSheet() {
         applicantName: name || "Pemohon Layanan",
         phone: rawPhone || "081234567890",
         email: idxEmail > -1 ? (row[idxEmail] || "").toString().trim() : "",
-        district: idxDistrict > -1 ? (row[idxDistrict] || "").toString().trim() : "",
+        district: rawDist,
         address: idxAddress > -1 ? (row[idxAddress] || "").toString().trim() : "",
-        institutionName: idxInst > -1 ? (row[idxInst] || "").toString().trim() : "",
+        institutionName: autoInst,
         status: idxStatus > -1 ? (row[idxStatus] || "SUBMITTED").toString().trim() : "SUBMITTED",
         fileUrls: idxFiles > -1 ? (row[idxFiles] || "").toString().trim() : "",
         notes: idxNotes > -1 ? (row[idxNotes] || "").toString().trim() : ""

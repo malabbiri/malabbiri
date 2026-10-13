@@ -347,7 +347,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       const applicantName = formData['applicantName'] || 'Pemohon';
       const phone = formData['phone'] || '081234567890';
       const address = formData['address'] || (formData['district'] ? `Kecamatan ${formData['district']}` : 'Kabupaten Gowa');
-      const institutionName = formData['institutionName'] || (service.id === 8 ? `KUA Kec. ${formData['district']}` : undefined);
+      const institutionName = formData['institutionName'] || (formData['district'] ? `KUA Kec. ${formData['district']}` : undefined);
       const district = formData['district'];
 
       const newRecord = createNewSubmission({
