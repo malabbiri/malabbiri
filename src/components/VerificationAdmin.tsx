@@ -41,6 +41,7 @@ import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAcco
 import { getGoogleAppsScriptUrl, sendSubmissionToGoogleSheetViaScript } from '../utils/googleAppsScript';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';
+import { GoogleDriveSyncImportModal } from './GoogleDriveSyncImportModal';
 
 interface VerificationAdminProps {
   submissions: SubmissionRecord[];
@@ -93,13 +94,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
   // Google Drive integration modal state
   const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(false);
+  const [isSyncImportModalOpen, setIsSyncImportModalOpen] = useState(false);
   const [isGasConfigured, setIsGasConfigured] = useState(false);
 
   React.useEffect(() => {
     getGoogleAppsScriptUrl().then((url) => {
       setIsGasConfigured(!!url);
     });
-  }, [isGoogleDriveModalOpen]);
+  }, [isGoogleDriveModalOpen, isSyncImportModalOpen]);
 
   // Officer accounts management modal states
   const [isManageOfficersOpen, setIsManageOfficersOpen] = useState(false);
@@ -425,12 +427,21 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
         <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
           <button
+            onClick={() => setIsSyncImportModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
+            title="Tarik data pengajuan & berkas dari Google Drive atau Google Sheets ke Panel Verifikasi"
+          >
+            <Cloud className="w-4 h-4 text-emerald-200" />
+            <span>Tarik / Impor Data Drive</span>
+          </button>
+
+          <button
             onClick={() => setIsGoogleDriveModalOpen(true)}
             className="px-3.5 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
-            title="Integrasi Google Drive & Google Sheets Kantor (100% Gratis Selamanya)"
+            title="Pengaturan Webhook Google Drive & Google Sheets Kantor (100% Gratis Selamanya)"
           >
-            <Cloud className="w-4 h-4 text-emerald-700" />
-            <span>Google Drive & Sheets</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+            <span>Integrasi Drive & Sheets</span>
             {isGasConfigured ? (
               <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" title="Terhubung"></span>
             ) : (
@@ -485,6 +496,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
+            onClick={() => setIsSyncImportModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            title="Tarik data pengajuan & berkas dari Google Drive"
+          >
+            <Cloud className="w-4 h-4 text-emerald-300" />
+            <span>Tarik Data Drive</span>
+          </button>
+
+          <button
             onClick={handlePurgeAllSubmissions}
             className="px-3 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Kosongkan seluruh berkas permohonan"
@@ -510,6 +530,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </button>
         </div>
       </div>
+
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -771,9 +792,20 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             </h4>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
               {submissions.length === 0
-                ? 'Seluruh data demo telah dibersihkan. Setiap berkas dan lampiran yang diajukan oleh masyarakat melalui formulir layanan online akan langsung masuk ke tabel ini untuk diperiksa dan divalidasi.'
+                ? 'Jika terdapat berkas pengajuan masyarakat yang sudah tersimpan di Google Drive atau Google Sheets kantor sejak bulan Oktober, Anda dapat menarik dan memunculkannya ke panel ini secara instan.'
                 : 'Coba ubah kata kunci pencarian atau sesuaikan opsi filter status, layanan, atau kecamatan.'}
             </p>
+            {submissions.length === 0 && (
+              <div className="pt-2">
+                <button
+                  onClick={() => setIsSyncImportModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold inline-flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Cloud className="w-4 h-4 text-emerald-200" />
+                  <span>Tarik Berkas Masuk dari Google Drive / Sheet</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -908,14 +940,33 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                             <span className="text-[10px] text-slate-400 font-medium">
                               • {new Date(file.uploadedAt).toLocaleDateString('id-ID')}
                             </span>
-                            <span className="px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[9px] font-semibold">
-                              {file.cloudStorageUrl ? 'Firebase Cloud' : 'Tersimpan Digital'}
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${
+                              file.googleDriveViewUrl 
+                                ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                                : file.cloudStorageUrl 
+                                  ? 'bg-purple-50 border-purple-200 text-purple-800' 
+                                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            }`}>
+                              {file.googleDriveViewUrl ? 'Google Drive' : file.cloudStorageUrl ? 'Firebase Cloud' : 'Tersimpan Digital'}
                             </span>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0 pt-1 sm:pt-0">
+                        {file.googleDriveViewUrl && (
+                          <a
+                            href={file.googleDriveViewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                            title="Buka Dokumen Asli di Google Drive Kantor"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Buka di Drive</span>
+                          </a>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => setViewingFile({ file, submissionId: selectedSubmission.id, applicantName: selectedSubmission.applicantName })}
@@ -1347,6 +1398,17 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         }}
         officerName={officer.name}
       />
+
+      {/* Google Drive & Sheet Sync / Import Modal */}
+      <GoogleDriveSyncImportModal
+        isOpen={isSyncImportModalOpen}
+        onClose={() => setIsSyncImportModalOpen(false)}
+        onSuccess={(count) => {
+          onRefreshSubmissions();
+          alert(`Sukses! Sebanyak ${count} data permohonan dari Google Drive & Sheets telah berhasil dimasukkan ke Panel Verifikasi.`);
+        }}
+      />
     </div>
   );
 };
+

@@ -21,6 +21,13 @@ var SPREADSHEET_NAME = "DATA_PERMOHONAN_MALABIRI_BIMAS_ISLAM_GOWA";
 var DRIVE_FOLDER_NAME = "ARSIP_MALABIRI_BIMAS_ISLAM_GOWA";
 
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || "";
+  if (action === "get_submissions") {
+    var result = getSubmissionsFromSheet();
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
     service: "MALA'BIRI Google Drive & Sheet Webhook",
@@ -32,6 +39,13 @@ function doPost(e) {
   try {
     var contents = e.postData.contents;
     var data = JSON.parse(contents);
+
+    // ACTION 0: TARIK DATA PERMOHONAN DARI GOOGLE SHEETS KE WEB
+    if (data.action === "get_submissions") {
+      var fetchResult = getSubmissionsFromSheet();
+      return ContentService.createTextOutput(JSON.stringify(fetchResult))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     // ACTION 1: SIMPAN DATA IDENTITAS PEMOHON KE GOOGLE SHEETS
     if (data.action === "record_submission" || data.applicantName) {
@@ -191,6 +205,81 @@ function recordSubmissionToSheet(data) {
     return {
       status: "error",
       message: "Gagal mencatat ke sheet: " + err.toString()
+    };
+  }
+}
+
+/**
+ * Membaca seluruh data permohonan dari Google Sheets untuk ditarik ke aplikasi web
+ */
+function getSubmissionsFromSheet() {
+  try {
+    var spreadsheet = getTargetSpreadsheet();
+    var sheet = spreadsheet.getSheetByName("Data Permohonan") || spreadsheet.getSheets()[0];
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow <= 1) {
+      return { status: "success", count: 0, submissions: [], spreadsheetUrl: spreadsheet.getUrl() };
+    }
+
+    var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var headers = values[0].map(function(h) { return (h || "").toString().trim().toLowerCase(); });
+
+    var idxTime = headers.findIndex(function(h) { return h.indexOf("waktu") > -1 || h.indexOf("timestamp") > -1 || h.indexOf("tanggal") > -1; });
+    var idxId = headers.findIndex(function(h) { return h.indexOf("tiket") > -1 || (h.indexOf("id") > -1 && h.indexOf("masjid") === -1); });
+    var idxService = headers.findIndex(function(h) { return h.indexOf("layanan") > -1; });
+    var idxName = headers.findIndex(function(h) { return h.indexOf("pemohon") > -1 || h.indexOf("nama") > -1; });
+    var idxPhone = headers.findIndex(function(h) { return h.indexOf("wa") > -1 || h.indexOf("hp") > -1 || h.indexOf("telepon") > -1 || h.indexOf("kontak") > -1; });
+    var idxEmail = headers.findIndex(function(h) { return h.indexOf("email") > -1; });
+    var idxDistrict = headers.findIndex(function(h) { return h.indexOf("kecamatan") > -1; });
+    var idxAddress = headers.findIndex(function(h) { return h.indexOf("alamat") > -1; });
+    var idxInst = headers.findIndex(function(h) { return h.indexOf("lembaga") > -1 || h.indexOf("masjid") > -1 || h.indexOf("kua") > -1; });
+    var idxStatus = headers.findIndex(function(h) { return h.indexOf("status") > -1; });
+    var idxFiles = headers.findIndex(function(h) { return h.indexOf("tautan") > -1 || h.indexOf("berkas") > -1 || h.indexOf("drive") > -1 || h.indexOf("link") > -1; });
+    var idxNotes = headers.findIndex(function(h) { return h.indexOf("catatan") > -1 || h.indexOf("keterangan") > -1; });
+
+    var list = [];
+    for (var r = 1; r < values.length; r++) {
+      var row = values[r];
+      var name = idxName > -1 ? (row[idxName] || "").toString().trim() : "";
+      var service = idxService > -1 ? (row[idxService] || "").toString().trim() : "";
+      if (!name && !service) continue;
+
+      var rawPhone = idxPhone > -1 ? (row[idxPhone] || "").toString().trim().replace(/^'/, "") : "";
+      var rawTime = idxTime > -1 ? row[idxTime] : "";
+      var timeIso = "";
+      try {
+        timeIso = rawTime instanceof Date ? rawTime.toISOString() : (rawTime ? new Date(rawTime).toISOString() : new Date().toISOString());
+      } catch (err) {
+        timeIso = new Date().toISOString();
+      }
+
+      list.push({
+        id: idxId > -1 && row[idxId] ? (row[idxId] || "").toString().trim() : "",
+        submittedAt: timeIso,
+        serviceTitle: service || "Pelayanan Administrasi Bimas Islam",
+        applicantName: name || "Pemohon Layanan",
+        phone: rawPhone || "081234567890",
+        email: idxEmail > -1 ? (row[idxEmail] || "").toString().trim() : "",
+        district: idxDistrict > -1 ? (row[idxDistrict] || "").toString().trim() : "",
+        address: idxAddress > -1 ? (row[idxAddress] || "").toString().trim() : "",
+        institutionName: idxInst > -1 ? (row[idxInst] || "").toString().trim() : "",
+        status: idxStatus > -1 ? (row[idxStatus] || "SUBMITTED").toString().trim() : "SUBMITTED",
+        fileUrls: idxFiles > -1 ? (row[idxFiles] || "").toString().trim() : "",
+        notes: idxNotes > -1 ? (row[idxNotes] || "").toString().trim() : ""
+      });
+    }
+
+    return {
+      status: "success",
+      count: list.length,
+      submissions: list,
+      spreadsheetUrl: spreadsheet.getUrl()
+    };
+  } catch (err) {
+    return {
+      status: "error",
+      message: "Gagal membaca baris Google Sheet: " + err.toString()
     };
   }
 }
@@ -443,5 +532,69 @@ export async function sendSubmissionToGoogleSheetViaScript(
       console.warn('Gagal mencatat ke Google Sheet otomatis:', fallbackErr);
       return { success: false, message: fallbackErr.message || 'Jaringan gagal' };
     }
+  }
+}
+
+/**
+ * Tarik data permohonan dari Google Sheets kantor via Webhook Apps Script
+ */
+export async function fetchSubmissionsFromGoogleSheetViaScript(scriptUrl: string): Promise<{
+  success: boolean;
+  message: string;
+  data?: any[];
+  spreadsheetUrl?: string;
+}> {
+  const cleanUrl = scriptUrl.trim();
+  if (!cleanUrl) {
+    return { success: false, message: 'URL Webhook Google Apps Script belum diisi.' };
+  }
+
+  try {
+    const targetUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=get_submissions`;
+    const response = await fetch(targetUrl, {
+      method: 'GET',
+      mode: 'cors'
+    });
+
+    if (response.ok) {
+      const json = await response.json().catch(() => null);
+      if (json && json.status === 'success') {
+        return {
+          success: true,
+          message: `Berhasil mengambil ${json.count ?? (json.submissions ? json.submissions.length : 0)} data dari Google Sheet`,
+          data: json.submissions || [],
+          spreadsheetUrl: json.spreadsheetUrl
+        };
+      }
+      if (json && json.message) {
+        return { success: false, message: json.message };
+      }
+    }
+
+    // Try POST if GET didn't succeed
+    const postRes = await fetch(cleanUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'get_submissions' })
+    });
+
+    if (postRes.ok) {
+      const json = await postRes.json().catch(() => null);
+      if (json && json.status === 'success') {
+        return {
+          success: true,
+          message: `Berhasil mengambil ${json.count ?? (json.submissions ? json.submissions.length : 0)} data dari Google Sheet`,
+          data: json.submissions || [],
+          spreadsheetUrl: json.spreadsheetUrl
+        };
+      }
+    }
+
+    return { success: false, message: `Server Webhook merespons dengan status HTTP ${response.status}. Pastikan Apps Script telah di-deploy dengan versi terbaru.` };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Gagal menghubungi Webhook Google Apps Script.'
+    };
   }
 }

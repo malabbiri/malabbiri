@@ -558,3 +558,69 @@ export function getServiceStatistics() {
     districtCounts
   };
 }
+
+/**
+ * Menyinkronkan atau mengimpor data permohonan dari Google Drive & Google Sheets
+ * Mencegah duplikasi data, menggabungkan tautan berkas, menyimpan ke Firestore, dan memperbarui cache lokal
+ */
+export async function importOrSyncSubmissions(
+  incomingSubmissions: SubmissionRecord[]
+): Promise<{ added: number; updated: number; total: number }> {
+  if (!incomingSubmissions || incomingSubmissions.length === 0) {
+    return { added: 0, updated: 0, total: cachedSubmissions.length };
+  }
+
+  let added = 0;
+  let updated = 0;
+  const currentMap = new Map<string, SubmissionRecord>();
+  cachedSubmissions.forEach(s => currentMap.set(s.id.toUpperCase(), s));
+
+  for (const item of incomingSubmissions) {
+    if (!item.id) continue;
+    const key = item.id.toUpperCase();
+    if (currentMap.has(key)) {
+      // Data sudah ada: perbarui tautan berkas Google Drive jika sebelumnya belum lengkap
+      const existing = currentMap.get(key)!;
+      const mergedFiles = [...(existing.files || [])];
+      (item.files || []).forEach(nf => {
+        if (!mergedFiles.some(mf => mf.fileName === nf.fileName || mf.googleDriveViewUrl === nf.googleDriveViewUrl)) {
+          mergedFiles.push(nf);
+        }
+      });
+      const merged: SubmissionRecord = {
+        ...item,
+        ...existing,
+        files: mergedFiles
+      };
+      currentMap.set(key, merged);
+      updated++;
+      
+      try {
+        const safeData = sanitizeForFirestore(merged);
+        await setDoc(doc(db, 'submissions', merged.id), safeData, { merge: true });
+      } catch (err) {
+        console.warn('Sync update doc error:', err);
+      }
+    } else {
+      // Data baru dari Google Drive/Sheet: tambahkan ke sistem
+      currentMap.set(key, item);
+      added++;
+
+      try {
+        const safeData = sanitizeForFirestore(item);
+        await setDoc(doc(db, 'submissions', item.id), safeData, { merge: true });
+      } catch (err) {
+        console.warn('Sync new doc error:', err);
+      }
+    }
+  }
+
+  const resultList = Array.from(currentMap.values());
+  resultList.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+  cachedSubmissions = resultList;
+  saveSubmissions(resultList);
+  notifySubmissionsListeners();
+
+  return { added, updated, total: resultList.length };
+}

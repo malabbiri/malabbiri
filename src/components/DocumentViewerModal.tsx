@@ -55,9 +55,13 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         // 0. Check if file has Google Drive URL
         if (file.googleDriveViewUrl) {
           if (isMounted) {
-            const drivePreviewUrl = file.googleDriveFileId 
-              ? `https://drive.google.com/file/d/${file.googleDriveFileId}/preview`
-              : file.googleDriveViewUrl;
+            let drivePreviewUrl = file.googleDriveViewUrl;
+            const match = file.googleDriveViewUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || file.googleDriveViewUrl.match(/id=([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+              drivePreviewUrl = `https://drive.google.com/file/d/${match[1]}/preview`;
+            } else if (file.googleDriveFileId) {
+              drivePreviewUrl = `https://drive.google.com/file/d/${file.googleDriveFileId}/preview`;
+            }
             setActiveUrl(drivePreviewUrl);
             setIsLoading(false);
           }
