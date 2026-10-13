@@ -317,6 +317,26 @@ function getSubmissionsFromSheet() {
       var rawInst = idxInst > -1 ? (row[idxInst] || "").toString().trim() : "";
       var autoInst = (rawInst && rawInst !== "-") ? rawInst : (cleanDist ? ("KUA Kec. " + cleanDist) : "");
 
+      var allRowFiles = [];
+      if (idxFiles > -1 && row[idxFiles]) {
+        allRowFiles.push((row[idxFiles] || "").toString().trim());
+      }
+      for (var col = 0; col < row.length; col++) {
+        if (col === idxTime || col === idxId || col === idxPhone || col === idxEmail) continue;
+        var cellStr = (row[col] || "").toString().trim();
+        if (cellStr.indexOf("http") > -1 || cellStr.indexOf("drive.google.com") > -1) {
+          var matchedU = cellStr.match(/https?:\/\/[^\s,;"'<>]+/g);
+          if (matchedU) {
+            for (var mu = 0; mu < matchedU.length; mu++) {
+              if (allRowFiles.indexOf(matchedU[mu]) === -1) {
+                allRowFiles.push(matchedU[mu]);
+              }
+            }
+          }
+        }
+      }
+      var combinedFileUrls = allRowFiles.join(", ");
+
       list.push({
         id: idxId > -1 && row[idxId] ? (row[idxId] || "").toString().trim() : "",
         submittedAt: timeIso,
@@ -328,7 +348,7 @@ function getSubmissionsFromSheet() {
         address: idxAddress > -1 ? (row[idxAddress] || "").toString().trim() : "",
         institutionName: autoInst,
         status: idxStatus > -1 ? (row[idxStatus] || "SUBMITTED").toString().trim() : "SUBMITTED",
-        fileUrls: idxFiles > -1 ? (row[idxFiles] || "").toString().trim() : "",
+        fileUrls: combinedFileUrls,
         notes: idxNotes > -1 ? (row[idxNotes] || "").toString().trim() : ""
       });
     }

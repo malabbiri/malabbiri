@@ -104,6 +104,40 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     changed = true;
   }
 
+  // Pulihkan berkas Google Drive otomatis jika kolom berkas masih 0 file tetapi ada link di formData
+  let files = Array.isArray(sub.files) ? [...sub.files] : [];
+  if (files.length === 0 && sub.formData && typeof sub.formData === 'object') {
+    const recoveredFiles: UploadedFileInfo[] = [];
+    Object.entries(sub.formData).forEach(([key, val]) => {
+      if (typeof val === 'string' && val.trim()) {
+        const matched = val.match(/https?:\/\/[^\s,;"'<>]+/g);
+        if (matched && matched.length > 0) {
+          matched.forEach((url, uIdx) => {
+            if (!recoveredFiles.some(f => f.googleDriveViewUrl === url)) {
+              const isDrive = url.includes('drive.google.com') || url.includes('docs.google.com');
+              const cleanLabel = key.replace(/_/g, ' ').replace(/^col\s*\d+\s*/i, '').trim();
+              recoveredFiles.push({
+                fieldName: `recovered_${key}_${uIdx + 1}`,
+                label: cleanLabel || `Berkas Google Drive ${recoveredFiles.length + 1}`,
+                fileName: isDrive ? `Berkas_Drive_${recoveredFiles.length + 1}.pdf` : `Dokumen_${recoveredFiles.length + 1}.pdf`,
+                fileSize: 1024 * 1024,
+                fileType: 'application/pdf',
+                uploadedAt: sub.submittedAt || new Date().toISOString(),
+                googleDriveViewUrl: url,
+                googleDriveDownloadUrl: url.replace('/view', '/export?format=pdf')
+              });
+            }
+          });
+        }
+      }
+    });
+
+    if (recoveredFiles.length > 0) {
+      files = recoveredFiles;
+      changed = true;
+    }
+  }
+
   if (!changed) return sub;
   return {
     ...sub,
@@ -111,7 +145,8 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     phone,
     district: district || sub.district,
     institutionName,
-    officerNotes
+    officerNotes,
+    files
   };
 }
 
@@ -678,13 +713,36 @@ export async function importOrSyncSubmissions(
   for (const rawItem of incomingSubmissions) {
     if (!rawItem.id) continue;
     const item = repairSubmissionFields(rawItem);
-    const key = item.id.toUpperCase();
-    if (currentMap.has(key)) {
+    let key = item.id.toUpperCase();
+    let existingKey: string | null = currentMap.has(key) ? key : null;
+
+    // Jika ID belum cocok langsung, coba cari apakah nama pemohon atau nomor HP sudah ada sebelumnya di sistem
+    if (!existingKey) {
+      for (const [k, s] of currentMap.entries()) {
+        const itemCleanName = item.applicantName?.trim().toLowerCase();
+        const existCleanName = s.applicantName?.trim().toLowerCase();
+        const nameMatches = itemCleanName && existCleanName && 
+          itemCleanName !== '-' && existCleanName !== '-' && 
+          itemCleanName !== 'pemohon layanan' && existCleanName !== 'pemohon layanan' &&
+          (itemCleanName === existCleanName || existCleanName.includes(itemCleanName) || itemCleanName.includes(existCleanName));
+
+        const itemNum = item.phone?.replace(/[^0-9]/g, '');
+        const existNum = s.phone?.replace(/[^0-9]/g, '');
+        const phoneMatches = itemNum && existNum && itemNum.length >= 9 && itemNum === existNum;
+
+        if (nameMatches || phoneMatches) {
+          existingKey = k;
+          break;
+        }
+      }
+    }
+
+    if (existingKey) {
       // Data sudah ada: perbarui tautan berkas Google Drive & perbaiki nama/telepon jika sebelumnya korup
-      const existing = currentMap.get(key)!;
+      const existing = currentMap.get(existingKey)!;
       const mergedFiles = [...(existing.files || [])];
       (item.files || []).forEach(nf => {
-        if (!mergedFiles.some(mf => mf.fileName === nf.fileName || mf.googleDriveViewUrl === nf.googleDriveViewUrl)) {
+        if (!mergedFiles.some(mf => mf.fileName === nf.fileName || (nf.googleDriveViewUrl && mf.googleDriveViewUrl === nf.googleDriveViewUrl))) {
           mergedFiles.push(nf);
         }
       });
@@ -701,13 +759,15 @@ export async function importOrSyncSubmissions(
       const merged: SubmissionRecord = {
         ...existing,
         ...item,
+        id: existing.id, // Pertahankan ID tiket asli yang sudah ada
+        verificationCode: existing.verificationCode || item.verificationCode,
         applicantName: finalName || existing.applicantName,
         phone: finalPhone || existing.phone,
         status: existing.status || item.status, // preserve officer review status
         statusHistory: existing.statusHistory && existing.statusHistory.length > 0 ? existing.statusHistory : item.statusHistory,
         files: mergedFiles
       };
-      currentMap.set(key, merged);
+      currentMap.set(existingKey, merged);
       updated++;
       
       try {
@@ -781,5 +841,93 @@ export async function updateSubmissionApplicant(
   }
 
   return updated;
+}
+
+/**
+ * Menautkan berkas atau folder Google Drive secara langsung ke permohonan yang ada di Panel Verifikasi
+ */
+export async function attachDriveFileToSubmission(
+  submissionId: string,
+  driveUrl: string,
+  label?: string
+): Promise<SubmissionRecord | null> {
+  const index = cachedSubmissions.findIndex((item) => item.id.toUpperCase() === submissionId.toUpperCase());
+  if (index === -1) return null;
+
+  const current = cachedSubmissions[index];
+  const cleanUrl = driveUrl.trim();
+  const existingFiles = Array.isArray(current.files) ? [...current.files] : [];
+  const fileNum = existingFiles.length + 1;
+
+  const cleanLabel = (label && label.trim()) || `Dokumen Google Drive ${fileNum}`;
+  const isDrive = cleanUrl.includes('drive.google.com') || cleanUrl.includes('docs.google.com');
+
+  const newFile: UploadedFileInfo = {
+    fieldName: `berkas_manual_drive_${Date.now()}_${fileNum}`,
+    label: cleanLabel,
+    fileName: `${cleanLabel.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_')}.pdf`,
+    fileSize: 1024 * 1024,
+    fileType: 'application/pdf',
+    uploadedAt: new Date().toISOString(),
+    googleDriveViewUrl: cleanUrl,
+    googleDriveDownloadUrl: isDrive ? cleanUrl.replace('/view', '/export?format=pdf') : undefined
+  };
+
+  const updatedRecord: SubmissionRecord = {
+    ...current,
+    files: [...existingFiles, newFile],
+    formData: {
+      ...(current.formData || {}),
+      googleDriveUrl: cleanUrl
+    }
+  };
+
+  cachedSubmissions[index] = updatedRecord;
+  saveSubmissions([...cachedSubmissions]);
+  notifySubmissionsListeners();
+
+  try {
+    const safeData = sanitizeForFirestore(updatedRecord);
+    await setDoc(doc(db, 'submissions', submissionId), safeData, { merge: true });
+  } catch (err) {
+    console.warn('Failed to update files in Firestore:', err);
+  }
+
+  return updatedRecord;
+}
+
+/**
+ * Menghapus berkas yang tertaut pada permohonan
+ */
+export async function removeFileFromSubmission(
+  submissionId: string,
+  fileIndex: number
+): Promise<SubmissionRecord | null> {
+  const index = cachedSubmissions.findIndex((item) => item.id.toUpperCase() === submissionId.toUpperCase());
+  if (index === -1) return null;
+
+  const current = cachedSubmissions[index];
+  const existingFiles = Array.isArray(current.files) ? [...current.files] : [];
+  if (fileIndex < 0 || fileIndex >= existingFiles.length) return current;
+
+  existingFiles.splice(fileIndex, 1);
+
+  const updatedRecord: SubmissionRecord = {
+    ...current,
+    files: existingFiles
+  };
+
+  cachedSubmissions[index] = updatedRecord;
+  saveSubmissions([...cachedSubmissions]);
+  notifySubmissionsListeners();
+
+  try {
+    const safeData = sanitizeForFirestore(updatedRecord);
+    await setDoc(doc(db, 'submissions', submissionId), safeData, { merge: true });
+  } catch (err) {
+    console.warn('Failed to delete file from Firestore:', err);
+  }
+
+  return updatedRecord;
 }
 

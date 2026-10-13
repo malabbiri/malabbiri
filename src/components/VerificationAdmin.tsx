@@ -31,7 +31,9 @@ import {
   Cloud,
   FileSpreadsheet,
   Award,
-  Edit2
+  Edit2,
+  Plus,
+  Link2
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { formatIndoDate } from '../utils/date';
@@ -41,7 +43,9 @@ import {
   deleteSubmission, 
   updateSubmissionApplicant, 
   isTimestampOrDateString, 
-  isLooksLikeServiceName 
+  isLooksLikeServiceName,
+  attachDriveFileToSubmission,
+  removeFileFromSubmission
 } from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
@@ -162,6 +166,62 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       console.error('Error updating applicant:', err);
     } finally {
       setIsSavingApplicant(false);
+    }
+  };
+
+  // Quick Link Google Drive file modal state
+  const [targetAttachSubmission, setTargetAttachSubmission] = useState<SubmissionRecord | null>(null);
+  const [quickDriveUrl, setQuickDriveUrl] = useState('');
+  const [quickDriveLabel, setQuickDriveLabel] = useState('');
+  const [isAttachingDrive, setIsAttachingDrive] = useState(false);
+  const [attachNotice, setAttachNotice] = useState<string | null>(null);
+
+  // Modal inline attach drive file state
+  const [modalDriveUrl, setModalDriveUrl] = useState('');
+  const [modalDriveLabel, setModalDriveLabel] = useState('');
+  const [isModalAttaching, setIsModalAttaching] = useState(false);
+  const [showAddMoreDriveInput, setShowAddMoreDriveInput] = useState(false);
+
+  const handleAttachDriveFile = async (subId: string, url: string, label?: string) => {
+    if (!url.trim()) return;
+    setIsAttachingDrive(true);
+    setIsModalAttaching(true);
+    try {
+      const updated = await attachDriveFileToSubmission(subId, url.trim(), label?.trim());
+      if (updated) {
+        if (selectedSubmission && selectedSubmission.id === subId) {
+          setSelectedSubmission(updated);
+        }
+        setAttachNotice(`Berkas Google Drive berhasil ditautkan ke permohonan!`);
+        setTimeout(() => setAttachNotice(null), 3500);
+        setQuickDriveUrl('');
+        setQuickDriveLabel('');
+        setTargetAttachSubmission(null);
+        setModalDriveUrl('');
+        setModalDriveLabel('');
+        setShowAddMoreDriveInput(false);
+        onRefreshSubmissions();
+      }
+    } catch (err: any) {
+      alert('Gagal menautkan berkas: ' + err.message);
+    } finally {
+      setIsAttachingDrive(false);
+      setIsModalAttaching(false);
+    }
+  };
+
+  const handleRemoveFile = async (subId: string, idx: number) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus tautan berkas ini?')) return;
+    try {
+      const updated = await removeFileFromSubmission(subId, idx);
+      if (updated) {
+        if (selectedSubmission && selectedSubmission.id === subId) {
+          setSelectedSubmission(updated);
+        }
+        onRefreshSubmissions();
+      }
+    } catch (err: any) {
+      alert('Gagal menghapus berkas: ' + err.message);
     }
   };
 
@@ -799,10 +859,32 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     })()}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                      <FileText className="w-3 h-3 text-emerald-700" />
-                      {filesCount} file
-                    </span>
+                    {filesCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => openVerificationModal(sub)}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-2xs transition-colors cursor-pointer"
+                        title="Klik untuk membuka & memeriksa berkas"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>{filesCount} file</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTargetAttachSubmission(sub);
+                          setQuickDriveUrl('');
+                          setQuickDriveLabel(sub.serviceTitle ? `${sub.serviceTitle}` : 'Laporan Bulanan');
+                        }}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md border border-amber-300 transition-colors cursor-pointer shadow-2xs group"
+                        title="Berkas masih 0 file. Klik untuk menautkan berkas dari Google Drive"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <span className="font-mono">0 file</span>
+                        <span className="text-[10px] text-amber-700 underline font-medium">+ Tautkan Drive</span>
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {sub.status === 'APPROVED' && (
@@ -1069,21 +1151,140 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                       <span>Lampiran Berkas yang Diunggah ({Array.isArray(selectedSubmission.files) ? selectedSubmission.files.length : 0} File):</span>
                     </h4>
                     <p className="text-[10px] text-slate-500 font-medium">
-                      Tersimpan di Basis Data MALA'BIRI • Pratinjau dokumen atau unduh file asli
+                      Tersimpan di Basis Data MALA'BIRI & Google Drive • Pratinjau dokumen atau unduh file asli
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => downloadAllFilesBatch(Array.isArray(selectedSubmission.files) ? selectedSubmission.files : [], selectedSubmission.id, selectedSubmission.applicantName)}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors self-start sm:self-auto cursor-pointer"
-                    title="Unduh semua berkas pemohon ini sekaligus ke komputer"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Unduh Semua Berkas</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {Array.isArray(selectedSubmission.files) && selectedSubmission.files.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => downloadAllFilesBatch(selectedSubmission.files || [], selectedSubmission.id, selectedSubmission.applicantName)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                        title="Unduh semua berkas pemohon ini sekaligus ke komputer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Unduh Semua Berkas</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMoreDriveInput(!showAddMoreDriveInput)}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                      title="Tambahkan atau hubungkan tautan Google Drive pemohon"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>{showAddMoreDriveInput ? 'Tutup Formulir' : '+ Tautkan Berkas Drive'}</span>
+                    </button>
+                  </div>
                 </div>
 
+                {/* Notification jika berkas masih 0 file */}
+                {(!Array.isArray(selectedSubmission.files) || selectedSubmission.files.length === 0) && (
+                  <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-300 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-amber-100 text-amber-800 flex-shrink-0 border border-amber-200">
+                        <AlertCircle className="w-5 h-5 text-amber-700" />
+                      </div>
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-bold text-amber-950">
+                          Berkas Belum Muncul di Panel (0 File Terhubung)
+                        </h5>
+                        <p className="text-[11px] text-amber-900 leading-relaxed font-medium">
+                          Berkas pemohon ini sudah ada di Google Drive kantor? Masukkan tautan (file atau folder) Google Drive di bawah ini agar berkas langsung terhubung dan dapat diverifikasi secara instan:
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1 bg-white p-3 rounded-lg border border-amber-200 shadow-2xs">
+                      <div className="sm:col-span-7">
+                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">
+                          Tautan File / Folder Google Drive:
+                        </label>
+                        <input
+                          type="url"
+                          value={modalDriveUrl}
+                          onChange={(e) => setModalDriveUrl(e.target.value)}
+                          placeholder="https://drive.google.com/file/d/... atau https://drive.google.com/drive/folders/..."
+                          className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">
+                          Nama / Label Berkas:
+                        </label>
+                        <input
+                          type="text"
+                          value={modalDriveLabel}
+                          onChange={(e) => setModalDriveLabel(e.target.value)}
+                          placeholder={selectedSubmission.serviceTitle || 'Laporan Bulanan'}
+                          className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex items-end">
+                        <button
+                          type="button"
+                          disabled={!modalDriveUrl.trim() || isModalAttaching}
+                          onClick={() => handleAttachDriveFile(selectedSubmission.id, modalDriveUrl, modalDriveLabel || selectedSubmission.serviceTitle)}
+                          className="w-full py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>{isModalAttaching ? 'Menyimpan...' : 'Tautkan Berkas'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Form Input Tambah Berkas Drive Tambahan (jika dibuka) */}
+                {showAddMoreDriveInput && Array.isArray(selectedSubmission.files) && selectedSubmission.files.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
+                    <h5 className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Hubungkan Tautan Berkas Google Drive Tambahan</span>
+                    </h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 rounded-lg border border-emerald-200">
+                      <div className="sm:col-span-7">
+                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">
+                          Tautan File / Folder Google Drive:
+                        </label>
+                        <input
+                          type="url"
+                          value={modalDriveUrl}
+                          onChange={(e) => setModalDriveUrl(e.target.value)}
+                          placeholder="https://drive.google.com/file/d/..."
+                          className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">
+                          Nama / Label Berkas:
+                        </label>
+                        <input
+                          type="text"
+                          value={modalDriveLabel}
+                          onChange={(e) => setModalDriveLabel(e.target.value)}
+                          placeholder="Dokumen Tambahan"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex items-end">
+                        <button
+                          type="button"
+                          disabled={!modalDriveUrl.trim() || isModalAttaching}
+                          onClick={() => handleAttachDriveFile(selectedSubmission.id, modalDriveUrl, modalDriveLabel || 'Dokumen Tambahan')}
+                          className="w-full py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>{isModalAttaching ? 'Menyimpan...' : 'Tautkan'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Daftar Berkas */}
                 <div className="space-y-2">
                   {(Array.isArray(selectedSubmission.files) ? selectedSubmission.files : []).map((file, idx) => (
                     <div
@@ -1149,6 +1350,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Unduh File</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(selectedSubmission.id, idx)}
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                          title="Hapus tautan berkas ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -1721,6 +1931,108 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Quick Attach Google Drive Modal */}
+      {targetAttachSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-emerald-800 px-5 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-white/15 text-emerald-200">
+                  <Link2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">
+                    Tautkan Berkas Google Drive ke Permohonan
+                  </h3>
+                  <p className="text-[11px] text-emerald-100">
+                    Tiket: <span className="font-mono font-bold">{targetAttachSubmission.id}</span> • {targetAttachSubmission.applicantName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTargetAttachSubmission(null)}
+                className="p-1 rounded-lg hover:bg-white/10 text-emerald-200 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-1">
+                <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span>Berkas Tersimpan di Google Drive</span>
+                </span>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Masukkan tautan file atau folder Google Drive pemohon di bawah ini. Berkas akan langsung terhubung ke sistem MALA'BIRI dan dapat diverifikasi secara instan.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Tautan File / Folder Google Drive: *
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={quickDriveUrl}
+                    onChange={(e) => setQuickDriveUrl(e.target.value)}
+                    placeholder="https://drive.google.com/file/d/... atau https://drive.google.com/open?id=..."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Bisa berupa tautan dokumen PDF, Word, Spreadsheet, atau folder Google Drive pemohon.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Nama / Label Berkas:
+                  </label>
+                  <input
+                    type="text"
+                    value={quickDriveLabel}
+                    onChange={(e) => setQuickDriveLabel(e.target.value)}
+                    placeholder="Contoh: Laporan Bulanan Penyuluh Agama"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTargetAttachSubmission(null)}
+                  disabled={isAttachingDrive}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={!quickDriveUrl.trim() || isAttachingDrive}
+                  onClick={() => handleAttachDriveFile(targetAttachSubmission.id, quickDriveUrl, quickDriveLabel || targetAttachSubmission.serviceTitle)}
+                  className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{isAttachingDrive ? 'Menyimpan ke Panel...' : 'Simpan & Tautkan Berkas'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Notice */}
+      {attachNotice && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-800 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold border border-emerald-600 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <Check className="w-4 h-4 text-emerald-300" />
+          <span>{attachNotice}</span>
         </div>
       )}
     </div>

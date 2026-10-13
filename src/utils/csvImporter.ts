@@ -254,36 +254,57 @@ export function convertRowsToSubmissions(rows: string[][]): {
     const rawTime = idxTimestamp >= 0 ? row[idxTimestamp] : '';
     const submittedAt = normalizeDate(rawTime);
 
-    // Parse file drive links
-    const rawFilesString = idxFiles >= 0 ? (row[idxFiles] || '').trim() : '';
+    // Parse file drive links: Scan seluruh kolom untuk mendeteksi tautan Google Drive / Docs / Cloud
     const files: UploadedFileInfo[] = [];
-    
+
+    // 1. Periksa kolom spesifik idxFiles jika ada
+    const rawFilesString = idxFiles >= 0 ? (row[idxFiles] || '').trim() : '';
     if (rawFilesString) {
-      // Find URLs in string
       const matched = rawFilesString.match(/https?:\/\/[^\s,;"'<>]+/g);
-      const urlMatches: string[] = matched ? Array.from(matched) : [];
-      if (urlMatches.length > 0) {
-        urlMatches.forEach((url: string, uIdx: number) => {
-          files.push({
-            fieldName: `berkas_${uIdx + 1}`,
-            label: `Berkas Pengajuan Google Drive ${uIdx + 1}`,
-            fileName: `Dokumen_Drive_${uIdx + 1}.pdf`,
-            fileSize: 1024 * 1024,
-            fileType: 'application/pdf',
-            uploadedAt: submittedAt,
-            googleDriveViewUrl: url,
-            googleDriveDownloadUrl: url.replace('/view', '/export?format=pdf')
-          });
+      if (matched && matched.length > 0) {
+        matched.forEach((url: string, uIdx: number) => {
+          if (!files.some(f => f.googleDriveViewUrl === url)) {
+            const isDrive = url.includes('drive.google.com') || url.includes('docs.google.com');
+            files.push({
+              fieldName: `berkas_${uIdx + 1}`,
+              label: `Berkas Pengajuan Google Drive ${uIdx + 1}`,
+              fileName: isDrive ? `Dokumen_Drive_${uIdx + 1}.pdf` : `Dokumen_${uIdx + 1}.pdf`,
+              fileSize: 1024 * 1024,
+              fileType: 'application/pdf',
+              uploadedAt: submittedAt,
+              googleDriveViewUrl: url,
+              googleDriveDownloadUrl: isDrive ? url.replace('/view', '/export?format=pdf') : undefined
+            });
+          }
         });
-      } else if (rawFilesString.length > 5) {
-        files.push({
-          fieldName: 'berkas_1',
-          label: 'Dokumen Persyaratan Pemohon',
-          fileName: 'Berkas_Pengajuan.pdf',
-          fileSize: 1024 * 1024,
-          fileType: 'application/pdf',
-          uploadedAt: submittedAt,
-          googleDriveViewUrl: rawFilesString.startsWith('http') ? rawFilesString : undefined
+      }
+    }
+
+    // 2. Pindai seluruh kolom pada baris untuk menemukan tautan Google Drive dari pertanyaan upload Google Form
+    for (let c = 0; c < row.length; c++) {
+      if (c === idxTimestamp || c === idxId || c === idxPhone || c === idxEmail) continue;
+      const cell = (row[c] || '').trim();
+      if (!cell) continue;
+
+      const matchedUrls = cell.match(/https?:\/\/[^\s,;"'<>]+/g);
+      if (matchedUrls && matchedUrls.length > 0) {
+        const colHeader = (rawHeaders[c] || `Berkas ${c + 1}`).trim();
+        matchedUrls.forEach((url: string) => {
+          if (!files.some(f => f.googleDriveViewUrl === url)) {
+            const isDrive = url.includes('drive.google.com') || url.includes('docs.google.com');
+            const cleanLabel = colHeader.replace(/^[0-9]+\.\s*/, '').trim();
+            const safeFileName = cleanLabel.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
+            files.push({
+              fieldName: `berkas_col_${c}_${files.length + 1}`,
+              label: cleanLabel || `Dokumen Google Drive ${files.length + 1}`,
+              fileName: isDrive ? `${safeFileName || 'Dokumen_Drive'}_${files.length + 1}.pdf` : `Dokumen_${files.length + 1}.pdf`,
+              fileSize: 1024 * 1024,
+              fileType: 'application/pdf',
+              uploadedAt: submittedAt,
+              googleDriveViewUrl: url,
+              googleDriveDownloadUrl: isDrive ? url.replace('/view', '/export?format=pdf') : undefined
+            });
+          }
         });
       }
     }
