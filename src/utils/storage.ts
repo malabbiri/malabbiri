@@ -229,6 +229,26 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     const urlPattern = /(?:https?:\/\/|drive\.google\.com\/|docs\.google\.com\/)[^\s,;"'<>\)\]]+/gi;
     const matches: string[] = (text.match(urlPattern) as string[] | null) || [];
 
+    // Deteksi jika text adalah nama berkas (memiliki ekstensi .pdf, .docx, .doc, .xlsx, .jpg, .png, dsb.)
+    const fileExtMatch = text.match(/\.(pdf|docx?|xlsx?|jpe?g|png|webp|zip|rar)$/i);
+    const isFileField = rawField && (rawField.startsWith('file_') || /(?:file|berkas|dokumen|lampiran|upload|laporan)/i.test(rawField));
+    if ((fileExtMatch || isFileField) && matches.length === 0 && text.length >= 3 && text !== '-' && text !== 'null' && text !== 'undefined' && text !== 'true' && text !== 'false') {
+      const cleanLabel = (rawLabel || '')
+        .replace(/_/g, ' ')
+        .replace(/^col\s*\d+\s*/i, '')
+        .replace(/^[0-9]+\.\s*/, '')
+        .trim();
+      const fileName = fileExtMatch ? text : `${(cleanLabel || 'Dokumen').replace(/\s+/g, '_')}.pdf`;
+      if (!foundCandidates.some(c => (c.originalFileName && c.originalFileName.toLowerCase() === fileName.toLowerCase()) || c.label.toLowerCase() === cleanLabel.toLowerCase())) {
+        foundCandidates.push({
+          url: '',
+          label: cleanLabel || 'Berkas Terlampir',
+          fieldName: rawField || 'drive_file',
+          originalFileName: fileName
+        });
+      }
+    }
+
     matches.forEach((u) => {
       let clean = u.replace(/[.,;:\)\]"'>]+$/, '').trim();
       if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
@@ -261,10 +281,11 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
 
   foundCandidates.forEach((candidate) => {
     const u = candidate.url;
-    // Cek apakah URL sudah tercatat di resultFiles
+    // Cek apakah URL atau nama berkas sudah tercatat di resultFiles
     const alreadyListed = resultFiles.some((ef) => {
-      if (ef.googleDriveViewUrl && ef.googleDriveViewUrl.toLowerCase() === u.toLowerCase()) return true;
-      if (ef.googleDriveDownloadUrl && ef.googleDriveDownloadUrl.toLowerCase() === u.toLowerCase()) return true;
+      if (candidate.originalFileName && ef.fileName && ef.fileName.toLowerCase() === candidate.originalFileName.toLowerCase()) return true;
+      if (u && ef.googleDriveViewUrl && ef.googleDriveViewUrl.toLowerCase() === u.toLowerCase()) return true;
+      if (u && ef.googleDriveDownloadUrl && ef.googleDriveDownloadUrl.toLowerCase() === u.toLowerCase()) return true;
       
       const getFileId = (str?: string) => {
         if (!str) return null;
@@ -278,14 +299,14 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     });
 
     if (!alreadyListed) {
-      const isDrive = u.includes('drive.google.com') || u.includes('docs.google.com');
-      const isFolder = u.includes('/folders/');
-      const isDoc = u.includes('docs.google.com/document');
-      const isSheet = u.includes('docs.google.com/spreadsheets');
-      const isImage = /\.(jpe?g|png|webp|gif)($|\?)/i.test(u);
+      const isDrive = !!(u && (u.includes('drive.google.com') || u.includes('docs.google.com')));
+      const isFolder = !!(u && u.includes('/folders/'));
+      const isDoc = !!(u && u.includes('docs.google.com/document'));
+      const isSheet = !!(u && u.includes('docs.google.com/spreadsheets'));
+      const isImage = !!(u && /\.(jpe?g|png|webp|gif)($|\?)/i.test(u)) || (candidate.originalFileName && /\.(jpe?g|png|webp|gif)$/i.test(candidate.originalFileName));
 
       let downloadUrl: string | undefined = undefined;
-      if (isDrive && !isFolder) {
+      if (isDrive && !isFolder && u) {
         if (u.includes('/view')) {
           downloadUrl = u.replace('/view', '/export?format=pdf');
         } else if (u.includes('open?id=')) {
@@ -302,7 +323,7 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
       }
 
       const fileNum = resultFiles.length + 1;
-      const baseLabel = candidate.label || (sub.serviceTitle ? `${sub.serviceTitle}` : `Berkas Google Drive ${fileNum}`);
+      const baseLabel = candidate.label || (sub.serviceTitle ? `${sub.serviceTitle}` : `Berkas ${fileNum}`);
       let ext = 'pdf';
       let mimeType = 'application/pdf';
       if (isFolder) {
@@ -326,13 +347,13 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
         .substring(0, 40);
 
       resultFiles.push({
-        fieldName: candidate.fieldName ? `recovered_${candidate.fieldName}_${fileNum}` : `drive_file_${fileNum}`,
+        fieldName: candidate.fieldName ? `recovered_${candidate.fieldName}_${fileNum}` : `file_${fileNum}`,
         label: baseLabel,
-        fileName: candidate.originalFileName || `${safeName || 'Dokumen_Drive'}_${fileNum}.${ext}`,
+        fileName: candidate.originalFileName || `${safeName || 'Dokumen'}_${fileNum}.${ext}`,
         fileSize: 1024 * 1024,
         fileType: mimeType,
         uploadedAt: sub.submittedAt || new Date().toISOString(),
-        googleDriveViewUrl: u,
+        googleDriveViewUrl: u || undefined,
         googleDriveDownloadUrl: downloadUrl
       });
     }
