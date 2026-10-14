@@ -21,7 +21,7 @@ import { SubmissionRecord, GOWA_DISTRICTS, UploadedFileInfo } from '../types';
 import { SERVICES_LIST } from '../data/services';
 import { parseCSV, convertRowsToSubmissions } from '../utils/csvImporter';
 import { getGoogleAppsScriptUrl, fetchSubmissionsFromGoogleSheetViaScript } from '../utils/googleAppsScript';
-import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission, isLooksLikeServiceName } from '../utils/storage';
+import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission, isLooksLikeServiceName, extractAllDriveFilesFromSubmission } from '../utils/storage';
 import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
 
 interface GoogleDriveSyncImportModalProps {
@@ -85,48 +85,8 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
       const res = await fetchSubmissionsFromGoogleSheetViaScript(scriptUrl);
       if (res.success && res.data) {
         // Convert sheet data rows into SubmissionRecord
-        const formatted: SubmissionRecord[] = res.data.map((item: any, idx: number) => {
-          const files: UploadedFileInfo[] = [];
-          const rawUrlSources: string[] = [
-            item.fileUrls,
-            item.driveUrl,
-            item.googleDriveUrl,
-            item.fileUrl,
-            item.link,
-            item.berkas,
-            item.tautan,
-            item.laporan
-          ].filter(Boolean);
-
-          // Pindai juga seluruh properti objek item untuk URL Google Drive
-          Object.values(item).forEach((v) => {
-            if (typeof v === 'string' && (v.includes('drive.google.com') || v.includes('docs.google.com'))) {
-              rawUrlSources.push(v);
-            }
-          });
-
-          rawUrlSources.forEach((src) => {
-            if (typeof src === 'string' && src) {
-              const matched = src.match(/https?:\/\/[^\s,;"'<>]+/g) || [];
-              matched.forEach((u: string) => {
-                if (!files.some(f => f.googleDriveViewUrl === u)) {
-                  const uIdx = files.length + 1;
-                  const isDrive = u.includes('drive.google.com') || u.includes('docs.google.com');
-                  files.push({
-                    fieldName: `berkas_${uIdx}`,
-                    label: `Berkas Pengajuan Google Drive ${uIdx}`,
-                    fileName: isDrive ? `Dokumen_Drive_${uIdx}.pdf` : `Dokumen_${uIdx}.pdf`,
-                    fileSize: 1024 * 1024,
-                    fileType: 'application/pdf',
-                    uploadedAt: item.submittedAt || new Date().toISOString(),
-                    googleDriveViewUrl: u,
-                    googleDriveDownloadUrl: isDrive ? u.replace('/view', '/export?format=pdf') : undefined
-                  });
-                }
-              });
-            }
-          });
-
+        const formatted: SubmissionRecord[] = res.data.map((item: any) => {
+          const files: UploadedFileInfo[] = extractAllDriveFilesFromSubmission(item);
           const serviceObj = SERVICES_LIST.find(s => s.title.toLowerCase() === (item.serviceTitle || '').toLowerCase()) || SERVICES_LIST[0];
 
           return {

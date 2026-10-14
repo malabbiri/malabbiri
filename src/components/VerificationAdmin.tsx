@@ -45,7 +45,10 @@ import {
   isTimestampOrDateString, 
   isLooksLikeServiceName,
   attachDriveFileToSubmission,
-  removeFileFromSubmission
+  removeFileFromSubmission,
+  scanAndRecoverAllDriveFiles,
+  extractAllDriveFilesFromSubmission,
+  repairSubmissionFields
 } from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
@@ -114,6 +117,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     getGoogleAppsScriptUrl().then((url) => {
       setIsGasConfigured(!!url);
     });
+    scanAndRecoverAllDriveFiles().then((res) => {
+      if (res.totalRecovered > 0) {
+        onRefreshSubmissions();
+      }
+    }).catch(() => {});
   }, [isGoogleDriveModalOpen, isSyncImportModalOpen]);
 
   // Edit Applicant Details Modal state
@@ -206,6 +214,58 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       alert('Gagal menautkan berkas: ' + err.message);
     } finally {
       setIsAttachingDrive(false);
+      setIsModalAttaching(false);
+    }
+  };
+
+  const [isScanningDrive, setIsScanningDrive] = useState(false);
+  const handleQuickScanAllDriveFiles = async () => {
+    setIsScanningDrive(true);
+    try {
+      const res = await scanAndRecoverAllDriveFiles();
+      if (res.totalRecovered > 0) {
+        setAttachNotice(`Berhasil memindai! ${res.totalRecovered} berkas Google Drive berhasil dimunculkan ke Panel Verifikasi.`);
+      } else {
+        setAttachNotice('Semua berkas Google Drive pemohon sudah tersinkronisasi dan tampil di tabel.');
+      }
+      setTimeout(() => setAttachNotice(null), 4000);
+      onRefreshSubmissions();
+    } catch (e: any) {
+      alert('Gagal memindai berkas: ' + e.message);
+    } finally {
+      setIsScanningDrive(false);
+    }
+  };
+
+  const handleAutoScanModalFiles = async () => {
+    if (!selectedSubmission) return;
+    setIsModalAttaching(true);
+    try {
+      const recovered = extractAllDriveFilesFromSubmission(selectedSubmission);
+      if (recovered.length > 0) {
+        let lastUpdated: SubmissionRecord | null = null;
+        for (const file of recovered) {
+          if (file.googleDriveViewUrl) {
+            lastUpdated = await attachDriveFileToSubmission(selectedSubmission.id, file.googleDriveViewUrl, file.label);
+          }
+        }
+        if (lastUpdated) {
+          setSelectedSubmission(lastUpdated);
+        } else {
+          setSelectedSubmission({
+            ...selectedSubmission,
+            files: recovered
+          });
+        }
+        setAttachNotice(`Berhasil memulihkan ${recovered.length} berkas Google Drive!`);
+        setTimeout(() => setAttachNotice(null), 3500);
+        onRefreshSubmissions();
+      } else {
+        alert('Tidak ditemukan tautan Google Drive otomatis pada data pemohon ini. Silakan tempelkan URL Google Drive pada formulir di bawah.');
+      }
+    } catch (err: any) {
+      alert('Gagal memindai berkas pemohon: ' + err.message);
+    } finally {
       setIsModalAttaching(false);
     }
   };
@@ -415,11 +475,17 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   };
 
   const openVerificationModal = (sub: SubmissionRecord) => {
-    setSelectedSubmission(sub);
-    setNewStatus(sub.status || 'VERIFYING');
+    const repaired = repairSubmissionFields(sub);
+    const effectiveFiles = extractAllDriveFilesFromSubmission(repaired);
+    const finalizedSub: SubmissionRecord = {
+      ...repaired,
+      files: effectiveFiles.length > 0 ? effectiveFiles : (repaired.files || [])
+    };
+    setSelectedSubmission(finalizedSub);
+    setNewStatus(finalizedSub.status || 'VERIFYING');
     // Kosongkan catatan admin yang akan terkirim ke WA pemohon secara default
     setOfficerNote('');
-    setEpaiGrade(sub.epaiGrade || '');
+    setEpaiGrade(finalizedSub.epaiGrade || '');
     setSaveSuccessNotice(false);
   };
 
@@ -632,6 +698,17 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </button>
 
           <button
+            type="button"
+            onClick={handleQuickScanAllDriveFiles}
+            disabled={isScanningDrive}
+            className="px-3.5 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            title="Pindai dan pulihkan seluruh berkas Google Drive yang belum muncul di tabel verifikasi"
+          >
+            <RefreshCw className={`w-4 h-4 text-teal-200 ${isScanningDrive ? 'animate-spin' : ''}`} />
+            <span>{isScanningDrive ? 'Memindai Drive...' : 'Pindai Berkas Drive'}</span>
+          </button>
+
+          <button
             onClick={handlePurgeAllSubmissions}
             className="px-3 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Kosongkan seluruh berkas permohonan"
@@ -771,7 +848,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
               {filteredList.map((sub) => {
-                const filesCount = Array.isArray(sub.files) ? sub.files.length : 0;
+                const effectiveFiles = (sub.files && sub.files.length > 0) ? sub.files : extractAllDriveFilesFromSubmission(sub);
+                const filesCount = effectiveFiles.length;
                 return (
                 <tr key={sub.id || Math.random().toString()} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3.5 font-mono font-bold text-emerald-800 whitespace-nowrap">
@@ -860,15 +938,28 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {filesCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => openVerificationModal(sub)}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-2xs transition-colors cursor-pointer"
-                        title="Klik untuk membuka & memeriksa berkas"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>{filesCount} file</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-2xs transition-colors cursor-pointer"
+                          title="Klik untuk membuka & memeriksa berkas"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>{filesCount} file</span>
+                        </button>
+                        {effectiveFiles.some(f => f.googleDriveViewUrl) && (
+                          <a
+                            href={effectiveFiles.find(f => f.googleDriveViewUrl)?.googleDriveViewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center p-1 rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors shadow-2xs"
+                            title="Buka Dokumen Asli di Google Drive Kantor"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
                     ) : (
                       <button
                         type="button"
@@ -952,7 +1043,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap text-right space-x-1.5">
                     <button
-                      onClick={() => openVerificationModal(sub)}
+                      onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
                       className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-[11px] inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                       title="Periksa data dan unduh berkas pemohon"
                     >
@@ -1195,6 +1286,19 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                           Berkas pemohon ini sudah ada di Google Drive kantor? Masukkan tautan (file atau folder) Google Drive di bawah ini agar berkas langsung terhubung dan dapat diverifikasi secara instan:
                         </p>
                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAutoScanModalFiles}
+                        disabled={isModalAttaching}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                        title="Pindai tautan Google Drive yang sudah ada di data permohonan pemohon ini"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 text-emerald-200 ${isModalAttaching ? 'animate-spin' : ''}`} />
+                        <span>Pindai Otomatis Berkas dari Data Pemohon</span>
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1 bg-white p-3 rounded-lg border border-amber-200 shadow-2xs">

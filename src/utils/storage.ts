@@ -104,38 +104,24 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     changed = true;
   }
 
-  // Pulihkan berkas Google Drive otomatis jika kolom berkas masih 0 file tetapi ada link di formData
+  // Pulihkan berkas Google Drive otomatis dari seluruh properti dan field permohonan
   let files = Array.isArray(sub.files) ? [...sub.files] : [];
-  if (files.length === 0 && sub.formData && typeof sub.formData === 'object') {
-    const recoveredFiles: UploadedFileInfo[] = [];
-    Object.entries(sub.formData).forEach(([key, val]) => {
-      if (typeof val === 'string' && val.trim()) {
-        const matched = val.match(/https?:\/\/[^\s,;"'<>]+/g);
-        if (matched && matched.length > 0) {
-          matched.forEach((url, uIdx) => {
-            if (!recoveredFiles.some(f => f.googleDriveViewUrl === url)) {
-              const isDrive = url.includes('drive.google.com') || url.includes('docs.google.com');
-              const cleanLabel = key.replace(/_/g, ' ').replace(/^col\s*\d+\s*/i, '').trim();
-              recoveredFiles.push({
-                fieldName: `recovered_${key}_${uIdx + 1}`,
-                label: cleanLabel || `Berkas Google Drive ${recoveredFiles.length + 1}`,
-                fileName: isDrive ? `Berkas_Drive_${recoveredFiles.length + 1}.pdf` : `Dokumen_${recoveredFiles.length + 1}.pdf`,
-                fileSize: 1024 * 1024,
-                fileType: 'application/pdf',
-                uploadedAt: sub.submittedAt || new Date().toISOString(),
-                googleDriveViewUrl: url,
-                googleDriveDownloadUrl: url.replace('/view', '/export?format=pdf')
-              });
-            }
-          });
-        }
-      }
-    });
+  const recoveredFiles = extractAllDriveFilesFromSubmission(sub);
+  if (recoveredFiles.length > files.length) {
+    files = recoveredFiles;
+    changed = true;
+  } else if (files.length === 0 && recoveredFiles.length > 0) {
+    files = recoveredFiles;
+    changed = true;
+  }
 
-    if (recoveredFiles.length > 0) {
-      files = recoveredFiles;
-      changed = true;
-    }
+  // Pastikan formData juga mencatat link drive utama jika ada
+  if (files.length > 0 && files[0].googleDriveViewUrl && (!sub.formData || !sub.formData.googleDriveUrl)) {
+    sub.formData = {
+      ...(sub.formData || {}),
+      googleDriveUrl: files[0].googleDriveViewUrl
+    };
+    changed = true;
   }
 
   if (!changed) return sub;
@@ -148,6 +134,170 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     officerNotes,
     files
   };
+}
+
+/**
+ * Ekstraksi komprehensif seluruh tautan Google Drive / Google Docs / Cloud dari suatu objek permohonan.
+ * Memindai sub.formData (secara rekursif termasuk array & nested object), sub.fileUrls, sub.driveUrl,
+ * sub.googleDriveUrl, sub.link, sub.berkas, sub.tautan, sub.laporan, sub.notes, dll.
+ */
+export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[] {
+  if (!sub) return [];
+  const existingFiles: UploadedFileInfo[] = Array.isArray(sub.files) ? [...sub.files] : [];
+  const foundCandidates: { url: string; label: string; fieldName: string }[] = [];
+
+  const addCandidate = (rawVal: any, rawLabel?: string, rawField?: string) => {
+    if (!rawVal) return;
+    if (typeof rawVal !== 'string') {
+      if (Array.isArray(rawVal)) {
+        rawVal.forEach((item, idx) => addCandidate(item, `${rawLabel || 'Berkas'} ${idx + 1}`, rawField));
+      } else if (typeof rawVal === 'object') {
+        Object.entries(rawVal).forEach(([k, v]) => addCandidate(v, k, k));
+      }
+      return;
+    }
+
+    const text = rawVal.trim();
+    if (!text) return;
+
+    // Regex mencakup https?://... dan juga drive.google.com atau docs.google.com tanpa awalan protokol
+    const driveRegex = /(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)*(?:drive\.google\.com|docs\.google\.com)[^\s,;"'<>\)\]]+/gi;
+    const matches: string[] = (text.match(driveRegex) as string[] | null) || [];
+
+    // Jika nama kolom mengandung kata kunci berkas/laporan/unggah/upload/lampiran/tautan/drive, ambil juga tautan http/https umum
+    const isFileKey = rawField && /(?:file|berkas|drive|lampiran|laporan|unggah|upload|tautan|link|dokumen|bukti)/i.test(rawField);
+    if (isFileKey) {
+      const genMatches = text.match(/https?:\/\/[^\s,;"'<>\)\]]+/gi) || [];
+      genMatches.forEach((m) => {
+        if (!matches.some(existing => existing.toLowerCase() === m.toLowerCase())) {
+          matches.push(m);
+        }
+      });
+    }
+
+    matches.forEach((u) => {
+      let clean = u.replace(/[.,;:\)\]"'>]+$/, '').trim();
+      if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+        clean = `https://${clean}`;
+      }
+
+      if (!foundCandidates.some(c => c.url.toLowerCase() === clean.toLowerCase())) {
+        const cleanLabel = (rawLabel || '')
+          .replace(/_/g, ' ')
+          .replace(/^col\s*\d+\s*/i, '')
+          .replace(/^[0-9]+\.\s*/, '')
+          .trim();
+        foundCandidates.push({
+          url: clean,
+          label: cleanLabel || 'Berkas Google Drive',
+          fieldName: rawField || 'drive_file'
+        });
+      }
+    });
+  };
+
+  // 1. Pindai properti langsung pada objek permohonan
+  const directProps = [
+    { key: 'fileUrls', val: sub.fileUrls },
+    { key: 'driveUrl', val: sub.driveUrl },
+    { key: 'googleDriveUrl', val: sub.googleDriveUrl },
+    { key: 'fileUrl', val: sub.fileUrl },
+    { key: 'link', val: sub.link },
+    { key: 'berkas', val: sub.berkas },
+    { key: 'tautan', val: sub.tautan },
+    { key: 'laporan', val: sub.laporan },
+    { key: 'url', val: sub.url },
+    { key: 'notes', val: sub.notes },
+    { key: 'keterangan', val: sub.keterangan }
+  ];
+  directProps.forEach(p => addCandidate(p.val, p.key, p.key));
+
+  // 2. Pindai seluruh field di sub.formData
+  if (sub.formData && typeof sub.formData === 'object') {
+    Object.entries(sub.formData).forEach(([k, v]) => {
+      addCandidate(v, k, k);
+    });
+  }
+
+  // 3. Bangun daftar berkas terverifikasi
+  const resultFiles = [...existingFiles];
+
+  foundCandidates.forEach((candidate) => {
+    const u = candidate.url;
+    // Cek apakah URL sudah tercatat di resultFiles
+    const alreadyListed = resultFiles.some((ef) => {
+      if (ef.googleDriveViewUrl && (ef.googleDriveViewUrl === u || ef.googleDriveViewUrl.toLowerCase() === u.toLowerCase())) return true;
+      if (ef.googleDriveDownloadUrl && (ef.googleDriveDownloadUrl === u || ef.googleDriveDownloadUrl.toLowerCase() === u.toLowerCase())) return true;
+      // Periksa kecocokan ID Google Drive jika ada
+      const getFileId = (str?: string) => {
+        if (!str) return null;
+        const m = str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || str.match(/id=([a-zA-Z0-9_-]+)/) || str.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+        return m ? m[1] : null;
+      };
+      const candId = getFileId(u);
+      const efId = getFileId(ef.googleDriveViewUrl) || ef.googleDriveFileId;
+      if (candId && efId && candId === efId) return true;
+      return false;
+    });
+
+    if (!alreadyListed) {
+      const isDrive = u.includes('drive.google.com') || u.includes('docs.google.com');
+      const isFolder = u.includes('/folders/');
+      const isDoc = u.includes('docs.google.com/document');
+      const isSheet = u.includes('docs.google.com/spreadsheets');
+
+      let downloadUrl: string | undefined = undefined;
+      if (isDrive && !isFolder) {
+        if (u.includes('/view')) {
+          downloadUrl = u.replace('/view', '/export?format=pdf');
+        } else if (u.includes('open?id=')) {
+          const fid = u.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+          if (fid) {
+            downloadUrl = `https://drive.google.com/uc?export=download&id=${fid}`;
+          }
+        } else if (u.includes('/file/d/')) {
+          const fid = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+          if (fid) {
+            downloadUrl = `https://drive.google.com/uc?export=download&id=${fid}`;
+          }
+        }
+      }
+
+      const fileNum = resultFiles.length + 1;
+      const baseLabel = candidate.label || (sub.serviceTitle ? `${sub.serviceTitle}` : `Berkas Google Drive ${fileNum}`);
+      let ext = 'pdf';
+      let mimeType = 'application/pdf';
+      if (isFolder) {
+        ext = 'zip';
+        mimeType = 'application/zip';
+      } else if (isSheet) {
+        ext = 'xlsx';
+        mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } else if (isDoc) {
+        ext = 'docx';
+        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      }
+
+      const safeName = baseLabel
+        .replace(/[^a-zA-Z0-9_\-\s]/g, '')
+        .trim()
+        .replace(/\s+/g, '_')
+        .substring(0, 40);
+
+      resultFiles.push({
+        fieldName: candidate.fieldName ? `recovered_${candidate.fieldName}_${fileNum}` : `drive_file_${fileNum}`,
+        label: baseLabel,
+        fileName: `${safeName || 'Dokumen_Drive'}_${fileNum}.${ext}`,
+        fileSize: 1024 * 1024,
+        fileType: mimeType,
+        uploadedAt: sub.submittedAt || new Date().toISOString(),
+        googleDriveViewUrl: u,
+        googleDriveDownloadUrl: downloadUrl
+      });
+    }
+  });
+
+  return resultFiles;
 }
 
 // In-memory cache for synchronous render
@@ -855,22 +1005,65 @@ export async function attachDriveFileToSubmission(
   if (index === -1) return null;
 
   const current = cachedSubmissions[index];
-  const cleanUrl = driveUrl.trim();
+  let cleanUrl = driveUrl.trim();
+  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    cleanUrl = `https://${cleanUrl}`;
+  }
+
   const existingFiles = Array.isArray(current.files) ? [...current.files] : [];
   const fileNum = existingFiles.length + 1;
 
-  const cleanLabel = (label && label.trim()) || `Dokumen Google Drive ${fileNum}`;
   const isDrive = cleanUrl.includes('drive.google.com') || cleanUrl.includes('docs.google.com');
+  const isFolder = cleanUrl.includes('/folders/');
+  const isSheet = cleanUrl.includes('docs.google.com/spreadsheets');
+  const isDoc = cleanUrl.includes('docs.google.com/document');
+
+  let downloadUrl: string | undefined = undefined;
+  if (isDrive && !isFolder) {
+    if (cleanUrl.includes('/view')) {
+      downloadUrl = cleanUrl.replace('/view', '/export?format=pdf');
+    } else if (cleanUrl.includes('open?id=')) {
+      const fid = cleanUrl.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+      if (fid) {
+        downloadUrl = `https://drive.google.com/uc?export=download&id=${fid}`;
+      }
+    } else if (cleanUrl.includes('/file/d/')) {
+      const fid = cleanUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+      if (fid) {
+        downloadUrl = `https://drive.google.com/uc?export=download&id=${fid}`;
+      }
+    }
+  }
+
+  const cleanLabel = (label && label.trim()) || (current.serviceTitle ? `${current.serviceTitle}` : `Berkas Google Drive ${fileNum}`);
+  let ext = 'pdf';
+  let mimeType = 'application/pdf';
+  if (isFolder) {
+    ext = 'zip';
+    mimeType = 'application/zip';
+  } else if (isSheet) {
+    ext = 'xlsx';
+    mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  } else if (isDoc) {
+    ext = 'docx';
+    mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+
+  const safeName = cleanLabel
+    .replace(/[^a-zA-Z0-9_\-\s]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .substring(0, 40);
 
   const newFile: UploadedFileInfo = {
     fieldName: `berkas_manual_drive_${Date.now()}_${fileNum}`,
     label: cleanLabel,
-    fileName: `${cleanLabel.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_')}.pdf`,
+    fileName: `${safeName || 'Dokumen_Drive'}_${fileNum}.${ext}`,
     fileSize: 1024 * 1024,
-    fileType: 'application/pdf',
+    fileType: mimeType,
     uploadedAt: new Date().toISOString(),
     googleDriveViewUrl: cleanUrl,
-    googleDriveDownloadUrl: isDrive ? cleanUrl.replace('/view', '/export?format=pdf') : undefined
+    googleDriveDownloadUrl: downloadUrl
   };
 
   const updatedRecord: SubmissionRecord = {
@@ -894,6 +1087,43 @@ export async function attachDriveFileToSubmission(
   }
 
   return updatedRecord;
+}
+
+/**
+ * Pindai seluruh data permohonan yang ada di sistem untuk memulihkan dan menautkan
+ * berkas Google Drive secara instan ke Panel Verifikasi.
+ */
+export async function scanAndRecoverAllDriveFiles(): Promise<{ totalRecovered: number; affectedSubmissions: number }> {
+  let totalRecovered = 0;
+  let affectedSubmissions = 0;
+
+  const updatedList = cachedSubmissions.map((sub) => {
+    const beforeCount = Array.isArray(sub.files) ? sub.files.length : 0;
+    const repaired = repairSubmissionFields(sub);
+    const afterCount = Array.isArray(repaired.files) ? repaired.files.length : 0;
+
+    if (afterCount > beforeCount) {
+      totalRecovered += (afterCount - beforeCount);
+      affectedSubmissions++;
+
+      // Sync update to Firestore
+      try {
+        const safeData = sanitizeForFirestore(repaired);
+        setDoc(doc(db, 'submissions', repaired.id), safeData, { merge: true }).catch(() => {});
+      } catch (e) {
+        // ignore
+      }
+    }
+    return repaired;
+  });
+
+  if (affectedSubmissions > 0) {
+    cachedSubmissions = updatedList;
+    saveSubmissions(updatedList);
+    notifySubmissionsListeners();
+  }
+
+  return { totalRecovered, affectedSubmissions };
 }
 
 /**
