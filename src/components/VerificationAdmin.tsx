@@ -213,6 +213,66 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     }
   };
 
+  const [manualDriveUrl, setManualDriveUrl] = useState('');
+  const [manualDriveLabel, setManualDriveLabel] = useState('');
+  const [isAttachingDrive, setIsAttachingDrive] = useState(false);
+  const [showAttachForm, setShowAttachForm] = useState(false);
+
+  const handleAttachDriveFile = async () => {
+    if (!selectedSubmission || !manualDriveUrl.trim()) return;
+    setIsAttachingDrive(true);
+    try {
+      const updated = await attachDriveFileToSubmission(
+        selectedSubmission.id,
+        manualDriveUrl.trim(),
+        manualDriveLabel.trim() || undefined
+      );
+      if (updated) {
+        setSelectedSubmission(updated);
+        setManualDriveUrl('');
+        setManualDriveLabel('');
+        setShowAttachForm(false);
+        setAttachNotice('Berkas Google Drive berhasil ditautkan ke permohonan ini!');
+        setTimeout(() => setAttachNotice(null), 4000);
+        onRefreshSubmissions();
+      }
+    } catch (err: any) {
+      alert('Gagal menautkan berkas: ' + err.message);
+    } finally {
+      setIsAttachingDrive(false);
+    }
+  };
+
+  const handleScanCurrentSubmissionFiles = async () => {
+    if (!selectedSubmission) return;
+    setIsScanningDrive(true);
+    try {
+      const repaired = repairSubmissionFields(selectedSubmission);
+      const extracted = extractAllDriveFilesFromSubmission(repaired);
+      if (extracted.length > (selectedSubmission.files?.length || 0)) {
+        const finalSub = { ...selectedSubmission, files: extracted };
+        setSelectedSubmission(finalSub);
+        // Persist to storage
+        if (extracted.length > 0 && extracted[0].googleDriveViewUrl) {
+          await attachDriveFileToSubmission(
+            selectedSubmission.id,
+            extracted[0].googleDriveViewUrl,
+            extracted[0].label
+          );
+        }
+        setAttachNotice(`Ditemukan & dipulihkan ${extracted.length} berkas dari data pengajuan!`);
+      } else {
+        setAttachNotice('Semua berkas yang tercatat sudah terhubung.');
+      }
+      setTimeout(() => setAttachNotice(null), 4000);
+      onRefreshSubmissions();
+    } catch (err: any) {
+      alert('Gagal memindai berkas: ' + err.message);
+    } finally {
+      setIsScanningDrive(false);
+    }
+  };
+
   // Officer accounts management modal states
   const [isManageOfficersOpen, setIsManageOfficersOpen] = useState(false);
   const [officersList, setOfficersList] = useState<OfficerAccount[]>([]);
@@ -407,7 +467,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     const effectiveFiles = extractAllDriveFilesFromSubmission(repaired);
     const finalizedSub: SubmissionRecord = {
       ...repaired,
-      files: effectiveFiles.length > 0 ? effectiveFiles : (repaired.files || [])
+      files: effectiveFiles.length > (repaired.files?.length || 0) ? effectiveFiles : (repaired.files || [])
     };
     setSelectedSubmission(finalizedSub);
     setNewStatus(finalizedSub.status || 'VERIFYING');
@@ -415,6 +475,9 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     setOfficerNote('');
     setEpaiGrade(finalizedSub.epaiGrade || '');
     setSaveSuccessNotice(false);
+    setManualDriveUrl('');
+    setManualDriveLabel('');
+    setShowAttachForm(false);
   };
 
   const handleStatusUpdateSubmit = (sendWA: boolean = false) => {
@@ -776,7 +839,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
               {filteredList.map((sub) => {
-                const effectiveFiles = (sub.files && sub.files.length > 0) ? sub.files : extractAllDriveFilesFromSubmission(sub);
+                const extracted = extractAllDriveFilesFromSubmission(sub);
+                const effectiveFiles = (extracted.length > (sub.files?.length || 0)) ? extracted : ((sub.files && sub.files.length > 0) ? sub.files : extracted);
                 const filesCount = effectiveFiles.length;
                 return (
                 <tr key={sub.id || Math.random().toString()} className="hover:bg-slate-50 transition-colors">
@@ -865,15 +929,30 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     })()}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-2xs transition-colors cursor-pointer"
-                      title="Klik untuk membuka & memeriksa berkas"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>{filesCount} file</span>
-                    </button>
+                    {filesCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-2xs transition-colors cursor-pointer"
+                        title="Klik untuk membuka & memeriksa berkas"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>{filesCount} file</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openVerificationModal({ ...sub, files: effectiveFiles });
+                          setShowAttachForm(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-md border border-teal-200 shadow-2xs transition-colors cursor-pointer"
+                        title="Klik untuk menautkan berkas Google Drive"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Tautkan Berkas</span>
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {sub.status === 'APPROVED' && (
@@ -1144,23 +1223,141 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     </p>
                   </div>
 
-                  {Array.isArray(selectedSubmission.files) && selectedSubmission.files.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => downloadAllFilesBatch(selectedSubmission.files || [], selectedSubmission.id, selectedSubmission.applicantName)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                      title="Unduh semua berkas pemohon ini sekaligus ke komputer"
+                      onClick={() => setShowAttachForm(!showAttachForm)}
+                      className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      title="Tautkan berkas atau link Google Drive baru"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Unduh Semua Berkas</span>
+                      <Plus className="w-3.5 h-3.5 text-teal-700" />
+                      <span>{showAttachForm ? 'Tutup Form Tautan' : 'Tautkan Berkas Drive'}</span>
                     </button>
-                  )}
+
+                    <button
+                      type="button"
+                      onClick={handleScanCurrentSubmissionFiles}
+                      disabled={isScanningDrive}
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Pindai otomatis data pemohon untuk memulihkan tautan Google Drive"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isScanningDrive ? 'animate-spin' : ''}`} />
+                      <span>{isScanningDrive ? 'Memindai...' : 'Pindai Dari Data'}</span>
+                    </button>
+
+                    {Array.isArray(selectedSubmission.files) && selectedSubmission.files.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => downloadAllFilesBatch(selectedSubmission.files || [], selectedSubmission.id, selectedSubmission.applicantName)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                        title="Unduh semua berkas pemohon ini sekaligus ke komputer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Unduh Semua Berkas</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Form Tautkan Berkas Google Drive */}
+                {showAttachForm && (
+                  <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200 space-y-3 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
+                        <Link2 className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Tautkan Berkas Google Drive / Cloud Baru</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAttachForm(false)}
+                        className="text-teal-700 hover:text-teal-900 p-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-teal-900 uppercase">
+                          URL / Tautan Google Drive:
+                        </label>
+                        <input
+                          type="text"
+                          value={manualDriveUrl}
+                          onChange={(e) => setManualDriveUrl(e.target.value)}
+                          placeholder="https://drive.google.com/file/d/... atau open?id=..."
+                          className="w-full px-3 py-1.5 rounded-lg bg-white border border-teal-300 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-teal-600"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-teal-900 uppercase">
+                          Nama / Label Dokumen:
+                        </label>
+                        <input
+                          type="text"
+                          value={manualDriveLabel}
+                          onChange={(e) => setManualDriveLabel(e.target.value)}
+                          placeholder="Contoh: Proposal / SK / KTP / Surat Permohonan"
+                          className="w-full px-3 py-1.5 rounded-lg bg-white border border-teal-300 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-teal-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAttachForm(false)}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAttachDriveFile}
+                        disabled={isAttachingDrive || !manualDriveUrl.trim()}
+                        className="px-3.5 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isAttachingDrive ? 'Menautkan...' : 'Simpan Tautan Berkas'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notice Alert if available */}
+                {attachNotice && (
+                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>{attachNotice}</span>
+                  </div>
+                )}
 
                 {/* Empty State jika belum ada berkas */}
                 {(!Array.isArray(selectedSubmission.files) || selectedSubmission.files.length === 0) && (
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-slate-500 text-xs font-medium">
-                    Belum ada berkas lampiran yang diunggah untuk permohonan ini.
+                  <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-3">
+                    <p className="text-slate-600 text-xs font-medium">
+                      Belum ada berkas lampiran yang terhubung untuk permohonan ini.
+                    </p>
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setShowAttachForm(true)}
+                        className="px-3.5 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tautkan Berkas Google Drive Sekarang</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleScanCurrentSubmissionFiles}
+                        disabled={isScanningDrive}
+                        className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isScanningDrive ? 'animate-spin' : ''}`} />
+                        <span>Pindai Otomatis Dari Data</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 

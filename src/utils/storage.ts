@@ -107,10 +107,18 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
   // Pulihkan berkas Google Drive otomatis dari seluruh properti dan field permohonan
   let files = Array.isArray(sub.files) ? [...sub.files] : [];
   const recoveredFiles = extractAllDriveFilesFromSubmission(sub);
-  if (recoveredFiles.length > files.length) {
-    files = recoveredFiles;
-    changed = true;
-  } else if (files.length === 0 && recoveredFiles.length > 0) {
+  recoveredFiles.forEach((rf) => {
+    const exists = files.some(
+      (f) => (f.fileName === rf.fileName && f.fieldName === rf.fieldName) ||
+             (f.googleDriveViewUrl && rf.googleDriveViewUrl && f.googleDriveViewUrl.toLowerCase() === rf.googleDriveViewUrl.toLowerCase()) ||
+             (f.googleDriveFileId && rf.googleDriveFileId && f.googleDriveFileId === rf.googleDriveFileId)
+    );
+    if (!exists) {
+      files.push(rf);
+      changed = true;
+    }
+  });
+  if (files.length === 0 && recoveredFiles.length > 0) {
     files = recoveredFiles;
     changed = true;
   }
@@ -141,10 +149,52 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
  * Memindai sub.formData (secara rekursif termasuk array & nested object), sub.fileUrls, sub.driveUrl,
  * sub.googleDriveUrl, sub.link, sub.berkas, sub.tautan, sub.laporan, sub.notes, dll.
  */
+/**
+ * Ekstraksi komprehensif seluruh tautan Google Drive / Google Docs / Cloud / File dari suatu objek permohonan.
+ * Memindai seluruh field formData (rekursif), properti permohonan, catatan, dan format Google Form.
+ */
 export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[] {
   if (!sub) return [];
-  const existingFiles: UploadedFileInfo[] = Array.isArray(sub.files) ? [...sub.files] : [];
-  const foundCandidates: { url: string; label: string; fieldName: string }[] = [];
+  
+  // 1. Normalisasi berkas yang sudah ada di sub.files (jika ada)
+  const existingFiles: UploadedFileInfo[] = (Array.isArray(sub.files) ? sub.files : []).map((f: any, idx: number) => {
+    const rawUrl = f.googleDriveViewUrl || f.url || (typeof f === 'string' ? f : undefined);
+    const isDrive = rawUrl && (rawUrl.includes('drive.google.com') || rawUrl.includes('docs.google.com'));
+    const isFolder = rawUrl && rawUrl.includes('/folders/');
+    
+    let viewUrl = f.googleDriveViewUrl;
+    let dlUrl = f.googleDriveDownloadUrl;
+    if (rawUrl && !viewUrl) {
+      viewUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
+    }
+    if (viewUrl && isDrive && !isFolder && !dlUrl) {
+      if (viewUrl.includes('/view')) {
+        dlUrl = viewUrl.replace('/view', '/export?format=pdf');
+      } else if (viewUrl.includes('open?id=')) {
+        const fid = viewUrl.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+        if (fid) dlUrl = `https://drive.google.com/uc?export=download&id=${fid}`;
+      } else if (viewUrl.includes('/file/d/')) {
+        const fid = viewUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+        if (fid) dlUrl = `https://drive.google.com/uc?export=download&id=${fid}`;
+      }
+    }
+
+    return {
+      fieldName: f.fieldName || `file_${idx + 1}`,
+      label: f.label || f.fileName || `Berkas Pengajuan ${idx + 1}`,
+      fileName: f.fileName || `Dokumen_${idx + 1}.${isFolder ? 'zip' : 'pdf'}`,
+      fileSize: (typeof f.fileSize === 'number' && !isNaN(f.fileSize) && f.fileSize > 0) ? f.fileSize : 1024 * 1024,
+      fileType: f.fileType || (isFolder ? 'application/zip' : 'application/pdf'),
+      uploadedAt: f.uploadedAt || sub.submittedAt || new Date().toISOString(),
+      dataUrl: f.dataUrl,
+      googleDriveFileId: f.googleDriveFileId,
+      googleDriveViewUrl: viewUrl,
+      googleDriveDownloadUrl: dlUrl,
+      cloudStorageUrl: f.cloudStorageUrl
+    };
+  });
+
+  const foundCandidates: { url: string; label: string; fieldName: string; originalFileName?: string }[] = [];
 
   const addCandidate = (rawVal: any, rawLabel?: string, rawField?: string) => {
     if (!rawVal) return;
@@ -160,20 +210,24 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     const text = rawVal.trim();
     if (!text) return;
 
-    // Regex mencakup https?://... dan juga drive.google.com atau docs.google.com tanpa awalan protokol
-    const driveRegex = /(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)*(?:drive\.google\.com|docs\.google\.com)[^\s,;"'<>\)\]]+/gi;
-    const matches: string[] = (text.match(driveRegex) as string[] | null) || [];
-
-    // Jika nama kolom mengandung kata kunci berkas/laporan/unggah/upload/lampiran/tautan/drive, ambil juga tautan http/https umum
-    const isFileKey = rawField && /(?:file|berkas|drive|lampiran|laporan|unggah|upload|tautan|link|dokumen|bukti)/i.test(rawField);
-    if (isFileKey) {
-      const genMatches = text.match(/https?:\/\/[^\s,;"'<>\)\]]+/gi) || [];
-      genMatches.forEach((m) => {
-        if (!matches.some(existing => existing.toLowerCase() === m.toLowerCase())) {
-          matches.push(m);
-        }
-      });
+    // Deteksi pola standar Google Form: "Nama_File.pdf (https://drive.google.com/open?id=...)"
+    const gFormMatch = text.match(/^(.+?)\s*\((https?:\/\/[^\)]+)\)$/);
+    if (gFormMatch) {
+      const explicitName = gFormMatch[1].trim();
+      const explicitUrl = gFormMatch[2].trim();
+      if (!foundCandidates.some(c => c.url.toLowerCase() === explicitUrl.toLowerCase())) {
+        foundCandidates.push({
+          url: explicitUrl,
+          label: explicitName || rawLabel || 'Berkas Google Drive',
+          fieldName: rawField || 'drive_file',
+          originalFileName: explicitName
+        });
+      }
     }
+
+    // Ekstraksi seluruh URL (http/https, drive.google.com, docs.google.com, bit.ly, s.id, dsb.)
+    const urlPattern = /(?:https?:\/\/|drive\.google\.com\/|docs\.google\.com\/)[^\s,;"'<>\)\]]+/gi;
+    const matches: string[] = (text.match(urlPattern) as string[] | null) || [];
 
     matches.forEach((u) => {
       let clean = u.replace(/[.,;:\)\]"'>]+$/, '').trim();
@@ -196,39 +250,22 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     });
   };
 
-  // 1. Pindai properti langsung pada objek permohonan
-  const directProps = [
-    { key: 'fileUrls', val: sub.fileUrls },
-    { key: 'driveUrl', val: sub.driveUrl },
-    { key: 'googleDriveUrl', val: sub.googleDriveUrl },
-    { key: 'fileUrl', val: sub.fileUrl },
-    { key: 'link', val: sub.link },
-    { key: 'berkas', val: sub.berkas },
-    { key: 'tautan', val: sub.tautan },
-    { key: 'laporan', val: sub.laporan },
-    { key: 'url', val: sub.url },
-    { key: 'notes', val: sub.notes },
-    { key: 'keterangan', val: sub.keterangan }
-  ];
-  directProps.forEach(p => addCandidate(p.val, p.key, p.key));
+  // 1. Pindai seluruh properti langsung pada objek permohonan
+  Object.entries(sub).forEach(([k, v]) => {
+    if (k === 'id' || k === 'verificationCode' || k === 'status' || k === 'statusHistory' || k === 'checklistConfirmed') return;
+    addCandidate(v, k, k);
+  });
 
-  // 2. Pindai seluruh field di sub.formData
-  if (sub.formData && typeof sub.formData === 'object') {
-    Object.entries(sub.formData).forEach(([k, v]) => {
-      addCandidate(v, k, k);
-    });
-  }
-
-  // 3. Bangun daftar berkas terverifikasi
+  // 2. Bangun daftar berkas terverifikasi
   const resultFiles = [...existingFiles];
 
   foundCandidates.forEach((candidate) => {
     const u = candidate.url;
     // Cek apakah URL sudah tercatat di resultFiles
     const alreadyListed = resultFiles.some((ef) => {
-      if (ef.googleDriveViewUrl && (ef.googleDriveViewUrl === u || ef.googleDriveViewUrl.toLowerCase() === u.toLowerCase())) return true;
-      if (ef.googleDriveDownloadUrl && (ef.googleDriveDownloadUrl === u || ef.googleDriveDownloadUrl.toLowerCase() === u.toLowerCase())) return true;
-      // Periksa kecocokan ID Google Drive jika ada
+      if (ef.googleDriveViewUrl && ef.googleDriveViewUrl.toLowerCase() === u.toLowerCase()) return true;
+      if (ef.googleDriveDownloadUrl && ef.googleDriveDownloadUrl.toLowerCase() === u.toLowerCase()) return true;
+      
       const getFileId = (str?: string) => {
         if (!str) return null;
         const m = str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || str.match(/id=([a-zA-Z0-9_-]+)/) || str.match(/\/folders\/([a-zA-Z0-9_-]+)/);
@@ -245,6 +282,7 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
       const isFolder = u.includes('/folders/');
       const isDoc = u.includes('docs.google.com/document');
       const isSheet = u.includes('docs.google.com/spreadsheets');
+      const isImage = /\.(jpe?g|png|webp|gif)($|\?)/i.test(u);
 
       let downloadUrl: string | undefined = undefined;
       if (isDrive && !isFolder) {
@@ -276,9 +314,12 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
       } else if (isDoc) {
         ext = 'docx';
         mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      } else if (isImage) {
+        ext = 'jpg';
+        mimeType = 'image/jpeg';
       }
 
-      const safeName = baseLabel
+      const safeName = (candidate.originalFileName || baseLabel)
         .replace(/[^a-zA-Z0-9_\-\s]/g, '')
         .trim()
         .replace(/\s+/g, '_')
@@ -287,7 +328,7 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
       resultFiles.push({
         fieldName: candidate.fieldName ? `recovered_${candidate.fieldName}_${fileNum}` : `drive_file_${fileNum}`,
         label: baseLabel,
-        fileName: `${safeName || 'Dokumen_Drive'}_${fileNum}.${ext}`,
+        fileName: candidate.originalFileName || `${safeName || 'Dokumen_Drive'}_${fileNum}.${ext}`,
         fileSize: 1024 * 1024,
         fileType: mimeType,
         uploadedAt: sub.submittedAt || new Date().toISOString(),
@@ -428,18 +469,26 @@ export function initFirestoreSync() {
         // Preserve local file dataUrls when remote Firestore snapshot omits them
         const existingMap = new Map(cachedSubmissions.map((s) => [s.id, s]));
         const mergedList: SubmissionRecord[] = remoteList.map((remoteSub) => {
+          const repairedRemote = repairSubmissionFields(remoteSub);
           const localSub = existingMap.get(remoteSub.id);
-          if (!localSub || !localSub.files) return remoteSub;
+          if (!localSub) return repairedRemote;
 
-          const mergedFiles = remoteSub.files.map((rf) => {
-            const localFile = localSub.files.find((lf) => lf.fileName === rf.fileName && lf.fieldName === rf.fieldName);
-            if (localFile?.dataUrl && !rf.dataUrl) {
-              return { ...rf, dataUrl: localFile.dataUrl };
+          const filePool = [...(repairedRemote.files || [])];
+          (localSub.files || []).forEach((lf) => {
+            const matchIndex = filePool.findIndex(
+              (rf) => (rf.fileName === lf.fileName && rf.fieldName === lf.fieldName) ||
+                      (rf.googleDriveViewUrl && lf.googleDriveViewUrl && rf.googleDriveViewUrl.toLowerCase() === lf.googleDriveViewUrl.toLowerCase())
+            );
+            if (matchIndex >= 0) {
+              if (lf.dataUrl && !filePool[matchIndex].dataUrl) {
+                filePool[matchIndex] = { ...filePool[matchIndex], dataUrl: lf.dataUrl };
+              }
+            } else {
+              filePool.push(lf);
             }
-            return rf;
           });
 
-          return repairSubmissionFields({ ...remoteSub, files: mergedFiles });
+          return repairSubmissionFields({ ...repairedRemote, files: filePool });
         });
 
         // Sort descending by submission time
