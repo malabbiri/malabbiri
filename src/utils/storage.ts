@@ -34,6 +34,48 @@ export function isLooksLikeServiceName(str?: string, serviceTitle?: string): boo
   return false;
 }
 
+/**
+ * Memeriksa apakah berkas merupakan berkas fisik/unggahan asli dari pemohon,
+ * bukan dokumen digital seperti Google Sheets, Formulir Google, Google Docs non-file, atau Google Drive folder.
+ */
+export function isPureUploadedFile(f: any): boolean {
+  if (!f) return false;
+  const rawUrl = (
+    f.googleDriveViewUrl || 
+    f.googleDriveDownloadUrl || 
+    f.cloudStorageUrl || 
+    f.url || 
+    (typeof f === 'string' ? f : '')
+  ).toLowerCase();
+  
+  // Dokumen digital yang BUKAN berkas upload pemohon -> langsung dihapus
+  if (
+    rawUrl.includes('docs.google.com/spreadsheets') ||
+    rawUrl.includes('docs.google.com/forms') ||
+    rawUrl.includes('docs.google.com/document') ||
+    rawUrl.includes('docs.google.com/presentation') ||
+    rawUrl.includes('/folders/')
+  ) {
+    return false;
+  }
+
+  // Nama file atau label yang mengindikasikan spreadsheet / dokumen digital / arsip digital
+  const name = (f.fileName || f.label || '').toLowerCase();
+  if (
+    name.includes('spreadsheet') ||
+    name.includes('formulir tanggapan') ||
+    name.includes('dokumen digital') ||
+    name.includes('arsip digital') ||
+    name.includes('arsip berkas digital') ||
+    name.includes('form responses') ||
+    name.includes('dokumen bawaan')
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord {
   let changed = false;
   let applicantName = sub.applicantName;
@@ -104,31 +146,11 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
     changed = true;
   }
 
-  // Pulihkan berkas Google Drive otomatis dari seluruh properti dan field permohonan
-  let files = Array.isArray(sub.files) ? [...sub.files] : [];
-  const recoveredFiles = extractAllDriveFilesFromSubmission(sub);
-  recoveredFiles.forEach((rf) => {
-    const exists = files.some(
-      (f) => (f.fileName === rf.fileName && f.fieldName === rf.fieldName) ||
-             (f.googleDriveViewUrl && rf.googleDriveViewUrl && f.googleDriveViewUrl.toLowerCase() === rf.googleDriveViewUrl.toLowerCase()) ||
-             (f.googleDriveFileId && rf.googleDriveFileId && f.googleDriveFileId === rf.googleDriveFileId)
-    );
-    if (!exists) {
-      files.push(rf);
-      changed = true;
-    }
-  });
-  if (files.length === 0 && recoveredFiles.length > 0) {
-    files = recoveredFiles;
-    changed = true;
-  }
-
-  // Pastikan formData juga mencatat link drive utama jika ada
-  if (files.length > 0 && files[0].googleDriveViewUrl && (!sub.formData || !sub.formData.googleDriveUrl)) {
-    sub.formData = {
-      ...(sub.formData || {}),
-      googleDriveUrl: files[0].googleDriveViewUrl
-    };
+  // HANYA simpan berkas yang diupload oleh pemohon (bukan berkas dokumen digital/spreadsheet/folder)
+  // Berkas dari dokumen digital langsung dihapus secara otomatis tanpa perlu manual
+  const originalFiles = Array.isArray(sub.files) ? sub.files : [];
+  const files = originalFiles.filter(isPureUploadedFile);
+  if (files.length !== originalFiles.length) {
     changed = true;
   }
 
@@ -218,8 +240,14 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     const text = rawVal.trim();
     if (!text) return;
 
-    // Abaikan jika text adalah link ke spreadsheet atau form (bukan berkas yang diupload)
-    if (text.includes('docs.google.com/spreadsheets') || text.includes('docs.google.com/forms')) {
+    // Abaikan jika text adalah dokumen digital (spreadsheet, forms, docx/docs, slides, folder)
+    if (
+      text.includes('docs.google.com/spreadsheets') || 
+      text.includes('docs.google.com/forms') ||
+      text.includes('docs.google.com/document') ||
+      text.includes('docs.google.com/presentation') ||
+      text.includes('/folders/')
+    ) {
       return;
     }
 
@@ -228,7 +256,13 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     if (gFormMatch) {
       const explicitName = gFormMatch[1].trim();
       const explicitUrl = gFormMatch[2].trim();
-      if (!explicitUrl.includes('spreadsheets') && !explicitUrl.includes('forms') && !foundCandidates.some(c => c.url.toLowerCase() === explicitUrl.toLowerCase())) {
+      if (
+        !explicitUrl.includes('spreadsheets') && 
+        !explicitUrl.includes('forms') && 
+        !explicitUrl.includes('document') &&
+        !explicitUrl.includes('/folders/') &&
+        !foundCandidates.some(c => c.url.toLowerCase() === explicitUrl.toLowerCase())
+      ) {
         foundCandidates.push({
           url: explicitUrl,
           label: explicitName || rawLabel || 'Berkas Upload Pemohon',
@@ -239,7 +273,7 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
       return;
     }
 
-    // Ekstraksi seluruh URL berkas Google Drive / Cloud
+    // Ekstraksi hanya URL berkas Google Drive / Cloud yang valid
     const urlPattern = /(?:https?:\/\/|drive\.google\.com\/)[^\s,;"'<>\)\]]+/gi;
     const matches: string[] = (text.match(urlPattern) as string[] | null) || [];
 
@@ -249,8 +283,14 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
         clean = `https://${clean}`;
       }
 
-      // Pastikan bukan link spreadsheet atau formulir
-      if (clean.includes('spreadsheets') || clean.includes('docs.google.com/forms')) {
+      // Pastikan bukan link dokumen digital, spreadsheet, form, atau folder
+      if (
+        clean.includes('spreadsheets') || 
+        clean.includes('docs.google.com/forms') ||
+        clean.includes('docs.google.com/document') ||
+        clean.includes('docs.google.com/presentation') ||
+        clean.includes('/folders/')
+      ) {
         return;
       }
 
@@ -367,6 +407,9 @@ try {
     if (rawSubs) {
       const parsed: SubmissionRecord[] = JSON.parse(rawSubs);
       cachedSubmissions = parsed.map(repairSubmissionFields);
+      try {
+        localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(cachedSubmissions));
+      } catch (e) { /* ignore */ }
     } else {
       cachedSubmissions = [];
       localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify([]));
@@ -483,8 +526,8 @@ export function initFirestoreSync() {
           const localSub = existingMap.get(remoteSub.id);
           if (!localSub) return repairedRemote;
 
-          const filePool = [...(repairedRemote.files || [])];
-          (localSub.files || []).forEach((lf) => {
+          const filePool = [...(repairedRemote.files || [])].filter(isPureUploadedFile);
+          (localSub.files || []).filter(isPureUploadedFile).forEach((lf) => {
             const matchIndex = filePool.findIndex(
               (rf) => (rf.fileName === lf.fileName && rf.fieldName === lf.fieldName) ||
                       (rf.googleDriveViewUrl && lf.googleDriveViewUrl && rf.googleDriveViewUrl.toLowerCase() === lf.googleDriveViewUrl.toLowerCase())
@@ -498,7 +541,7 @@ export function initFirestoreSync() {
             }
           });
 
-          return repairSubmissionFields({ ...repairedRemote, files: filePool });
+          return repairSubmissionFields({ ...repairedRemote, files: filePool.filter(isPureUploadedFile) });
         });
 
         // Sort descending by submission time

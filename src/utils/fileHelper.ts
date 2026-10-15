@@ -361,172 +361,8 @@ export function dataURLtoBlob(dataUrl: string): Blob {
 }
 
 /**
- * Generates an authentic, fully compliant PDF document conforming to the PDF standard
- * using jsPDF. This guarantees that Adobe Acrobat, Chrome, and all PDF viewers open it
- * smoothly without any "Failed to load PDF document" or "corrupted file" errors.
- */
-export function generateSamplePdfBlob(file: UploadedFileInfo, submissionId?: string, applicantName?: string): Blob {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4'
-  });
-
-  // 1. Official Letterhead (Kop Surat Kemenag Gowa)
-  doc.setFont('times', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text('KEMENTERIAN AGAMA REPUBLIK INDONESIA', 105, 20, { align: 'center' });
-
-  doc.setFontSize(13);
-  doc.text('KANTOR KEMENTERIAN AGAMA KABUPATEN GOWA', 105, 26, { align: 'center' });
-
-  doc.setFontSize(11);
-  doc.text('SEKSI BIMBINGAN MASYARAKAT ISLAM', 105, 31, { align: 'center' });
-
-  doc.setFont('times', 'italic');
-  doc.setFontSize(8.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text('Jalan H. Agussalim No. 3 Sungguminasa, 92111 Telp (0411) 865195, Fax (0411) 867354', 105, 36.5, { align: 'center' });
-  doc.text('Pos-el kab.gowa@kemenag.go.id  laman https://gowa.kemenag.go.id/', 105, 40.5, { align: 'center' });
-
-  // Official double border line
-  doc.setDrawColor(15, 23, 42);
-  doc.setLineWidth(0.8);
-  doc.line(20, 43.5, 190, 43.5);
-  doc.setLineWidth(0.25);
-  doc.line(20, 44.7, 190, 44.7);
-
-  // 2. Document Title
-  doc.setFont('times', 'bold');
-  doc.setFontSize(12.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text('ARSIP DIGITAL DOKUMEN LAYANAN MALA\'BIRI', 105, 55, { align: 'center' });
-  doc.setLineWidth(0.2);
-  doc.line(45, 56.5, 165, 56.5);
-
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Nomor Registrasi: ${submissionId || 'MLB-2026-ARCHIVE'}`, 105, 62, { align: 'center' });
-
-  // 3. Metadata Information Card
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(20, 68, 170, 50, 2.5, 2.5, 'FD');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text('DATA IDENTITAS BERKAS TERVERIFIKASI:', 25, 75);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(51, 65, 85);
-  doc.text(`• Nama Berkas             : ${file.fileName}`, 25, 82);
-  doc.text(`• Kategori Persyaratan   : ${file.label}`, 25, 88);
-  doc.text(`• Nama Pemohon           : ${applicantName || 'Pemohon Layanan MALA\'BIRI'}`, 25, 94);
-  const uploadDate = file.uploadedAt ? new Date(file.uploadedAt) : new Date();
-  doc.text(`• Waktu Unggah / Kirim   : ${uploadDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} ${uploadDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WITA`, 25, 100);
-  doc.text(`• Status Otentikasi       : Berkas Sah & Tersimpan di Basis Data MALA'BIRI`, 25, 106);
-  doc.text(`• Ukuran Dokumen         : ${(file.fileSize / (1024 * 1024)).toFixed(2)} MB`, 25, 112);
-
-  // 4. Verification Statement
-  doc.setFont('times', 'normal');
-  doc.setFontSize(10.5);
-  doc.setTextColor(15, 23, 42);
-
-  const statement1 = `Diterangkan bahwa dokumen dengan nama berkas "${file.fileName}" yang dilampirkan untuk pemenuhan syarat layanan pada Seksi Bimbingan Masyarakat Islam Kantor Kementerian Agama Kabupaten Gowa telah teregistrasi dalam sistem elektronik MALA'BIRI.`;
-  const split1 = doc.splitTextToSize(statement1, 170);
-  doc.text(split1, 20, 128);
-
-  const statement2 = `Dokumen ini sah sebagai arsip verifikasi berkas permohonan. Petugas dan verifikator Bimas Islam Kemenag Kabupaten Gowa berhak melakukan pemeriksaan keabsahan data fisik maupun digital sesuai dengan ketentuan perundang-undangan dan petunjuk teknis yang berlaku.`;
-  const split2 = doc.splitTextToSize(statement2, 170);
-  doc.text(split2, 20, 144);
-
-  // 5. Official Verification Stamp and Signatures
-  const todayStr = new Intl.DateTimeFormat('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  }).format(new Date());
-
-  // Left side: Digital Stamp
-  doc.setDrawColor(5, 150, 105);
-  doc.setFillColor(236, 253, 245);
-  doc.roundedRect(20, 172, 65, 24, 2, 2, 'FD');
-  doc.setTextColor(5, 150, 105);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('✓ DIGITAL ARCHIVE VERIFIED', 52.5, 179, { align: 'center' });
-  doc.setFontSize(7);
-  doc.text('MALA\'BIRI BIMAS ISLAM GOWA', 52.5, 185, { align: 'center' });
-  doc.setFontSize(6.5);
-  doc.text('KEMENTERIAN AGAMA KAB. GOWA', 52.5, 190, { align: 'center' });
-
-  // Right side: Official Signature
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`Sungguminasa, ${todayStr}`, 150, 172, { align: 'center' });
-  doc.text('Petugas Seksi Bimas Islam,', 150, 177, { align: 'center' });
-
-  doc.setDrawColor(148, 163, 184);
-  doc.line(125, 202, 175, 202);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('Tim Verifikasi Dokumen', 150, 207, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139);
-  doc.text('Kemenag Kabupaten Gowa', 150, 211, { align: 'center' });
-
-  return doc.output('blob');
-}
-
-/**
- * Generates an official printable/downloadable HTML/document Blob for demo records
- * or fallback preview.
- */
-export function generateSampleDocumentBlob(file: UploadedFileInfo, submissionId?: string, applicantName?: string): Blob {
-  const isPdf = file.fileType === 'application/pdf' || /\.pdf$/i.test(file.fileName);
-  if (isPdf) {
-    return generateSamplePdfBlob(file, submissionId, applicantName);
-  }
-
-  const isImage = file.fileType.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.fileName);
-  if (isImage) {
-    // Generate a clean placeholder SVG / Image Blob
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
-      <rect width="800" height="600" fill="#0f172a"/>
-      <rect x="30" y="30" width="740" height="540" rx="16" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-      <text x="400" y="240" fill="#10b981" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle">KEMENTERIAN AGAMA KABUPATEN GOWA</text>
-      <text x="400" y="280" fill="#94a3b8" font-family="sans-serif" font-size="18" text-anchor="middle">Seksi Bimas Islam • Portal Layanan MALA'BIRI</text>
-      <text x="400" y="340" fill="#f8fafc" font-family="sans-serif" font-size="22" font-weight="bold" text-anchor="middle">${file.label}</text>
-      <text x="400" y="380" fill="#64748b" font-family="monospace" font-size="16" text-anchor="middle">${file.fileName}</text>
-      <text x="400" y="440" fill="#34d399" font-family="sans-serif" font-size="14" text-anchor="middle">✓ ARSIP DIGITAL TERVERIFIKASI</text>
-    </svg>`;
-    return new Blob([svg], { type: 'image/svg+xml' });
-  }
-
-  // Plain text / document
-  const content = `KEMENTERIAN AGAMA KABUPATEN GOWA - SEKSI BIMAS ISLAM
-ARSIP DOKUMEN LAYANAN MALA'BIRI
-------------------------------------------------------------
-Nomor Registrasi : ${submissionId || 'MLB-ARCHIVE'}
-Nama Berkas      : ${file.fileName}
-Kategori Syarat  : ${file.label}
-Nama Pemohon     : ${applicantName || '-'}
-Waktu Unggah     : ${new Date(file.uploadedAt).toLocaleString('id-ID')}
-Status           : Terverifikasi oleh Sistem MALA'BIRI Kemenag Kab. Gowa
-`;
-  return new Blob([content], { type: 'text/plain;charset=utf-8' });
-}
-
-/**
- * Triggers a direct, 100% reliable download of a file to the user's/officer's device.
- * Converted to native Blobs so Adobe Acrobat, Chrome PDF Viewer, and Mobile OS viewers
- * open the file cleanly without corrupted-format errors.
+ * Triggers a direct, 100% reliable download of an uploaded file to the user's/officer's device.
+ * Converted to native Blobs so viewers open the file cleanly without corrupted-format errors.
  */
 export async function downloadFile(file: UploadedFileInfo, submissionId?: string, applicantName?: string): Promise<void> {
   try {
@@ -566,20 +402,14 @@ export async function downloadFile(file: UploadedFileInfo, submissionId?: string
       return;
     }
 
-    const isPdf = file.fileType === 'application/pdf' || /\.pdf$/i.test(file.fileName);
     let blob: Blob | null = null;
 
     // 1. First priority: Check if file object already has dataUrl
     if (file.dataUrl && file.dataUrl.startsWith('data:')) {
-      // Validate that if it's a PDF, the dataUrl isn't an HTML string mistakenly saved previously
-      if (isPdf && file.dataUrl.startsWith('data:text/html')) {
-        blob = generateSamplePdfBlob(file, submissionId, applicantName);
-      } else {
-        blob = dataURLtoBlob(file.dataUrl);
-      }
+      blob = dataURLtoBlob(file.dataUrl);
     }
 
-    // 2. Second priority: If no dataUrl in memory, check Chunked Firestore (100% Free Cross-Device)
+    // 2. Second priority: If no dataUrl in memory, check Chunked Firestore
     if (!blob && file.fileChunkId) {
       try {
         const chunkedBase64 = await getFileFromChunks(file.fileChunkId);
@@ -596,21 +426,23 @@ export async function downloadFile(file: UploadedFileInfo, submissionId?: string
       const dbKey = generateFileKey(submissionId, file.fileName, file.fieldName);
       const storedDataUrl = await getFileFromDb(dbKey);
       if (storedDataUrl && storedDataUrl.startsWith('data:')) {
-        if (isPdf && storedDataUrl.startsWith('data:text/html')) {
-          blob = generateSamplePdfBlob(file, submissionId, applicantName);
-        } else {
-          blob = dataURLtoBlob(storedDataUrl);
-        }
+        blob = dataURLtoBlob(storedDataUrl);
       }
     }
 
-    // 3. Fourth priority: Generate real standard document Blob (Real jsPDF for PDFs!)
+    // If no binary blob is stored locally, open drive link or notify
     if (!blob) {
-      if (isPdf) {
-        blob = generateSamplePdfBlob(file, submissionId, applicantName);
-      } else {
-        blob = generateSampleDocumentBlob(file, submissionId, applicantName);
+      if (file.googleDriveViewUrl) {
+        window.open(file.googleDriveViewUrl, '_blank');
+        return;
       }
+      if (file.cloudStorageUrl) {
+        window.open(file.cloudStorageUrl, '_blank');
+        return;
+      }
+      console.warn('Berkas fisik biner tidak ditemukan untuk diunduh:', file.fileName);
+      alert(`Berkas fisik "${file.fileName}" belum memiliki salinan biner lokal. Jika tersimpan di Google Drive, silakan buka melalui tombol "Buka di Drive".`);
+      return;
     }
 
     // Trigger download using an object URL from the true binary Blob

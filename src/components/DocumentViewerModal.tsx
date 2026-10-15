@@ -4,16 +4,14 @@ import {
   Download, 
   ExternalLink, 
   FileText, 
-  Eye, 
   CheckCircle2, 
   ZoomIn, 
   ZoomOut, 
-  RotateCw,
   ShieldCheck,
   Loader2
 } from 'lucide-react';
 import { UploadedFileInfo } from '../types';
-import { downloadFile, generateSampleDocumentBlob, dataURLtoBlob } from '../utils/fileHelper';
+import { downloadFile, dataURLtoBlob } from '../utils/fileHelper';
 import { generateFileKey, getFileFromDb } from '../utils/indexedDbStorage';
 import { getFileFromChunks } from '../utils/chunkedStorage';
 
@@ -43,7 +41,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     async function resolveFileUrl() {
       setIsLoading(true);
       try {
-        // 0. Check if file has Firebase Cloud Storage URL (direct permanent raw file across all devices)
+        // 0. Check if file has Firebase Cloud Storage URL (direct permanent raw file)
         if (file.cloudStorageUrl) {
           if (isMounted) {
             setActiveUrl(file.cloudStorageUrl);
@@ -68,18 +66,9 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           return;
         }
 
-        // 0b. Check if file has Firebase Cloud Storage URL
-        if (file.cloudStorageUrl) {
-          if (isMounted) {
-            setActiveUrl(file.cloudStorageUrl);
-            setIsLoading(false);
-          }
-          return;
-        }
-
         let rawUrl = file.dataUrl;
 
-        // 1. Check Chunked Firestore (100% Free Cross-Device Storage)
+        // 1. Check Chunked Firestore
         if (!rawUrl && file.fileChunkId) {
           try {
             const chunkedData = await getFileFromChunks(file.fileChunkId);
@@ -91,7 +80,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           }
         }
 
-        // 1b. Check IndexedDB if missing in memory
+        // 2. Check IndexedDB if missing in memory
         if (!rawUrl && submissionId) {
           const key = generateFileKey(submissionId, file.fileName, file.fieldName);
           const fromDb = await getFileFromDb(key);
@@ -100,30 +89,21 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           }
         }
 
-        // 2. Format URL into a proper Blob URL for reliable viewer and tab opening
+        // 3. Convert dataUrl to native Blob URL for reliable viewer
         if (rawUrl && rawUrl.startsWith('data:')) {
-          if (isPdf && rawUrl.startsWith('data:text/html')) {
-            const blob = generateSampleDocumentBlob(file, submissionId, applicantName);
-            createdBlobUrl = URL.createObjectURL(blob);
-            rawUrl = createdBlobUrl;
-          } else {
-            const blob = dataURLtoBlob(rawUrl);
-            createdBlobUrl = URL.createObjectURL(blob);
-            rawUrl = createdBlobUrl;
-          }
-        } else if (!rawUrl) {
-          const blob = generateSampleDocumentBlob(file, submissionId, applicantName);
+          const blob = dataURLtoBlob(rawUrl);
           createdBlobUrl = URL.createObjectURL(blob);
           rawUrl = createdBlobUrl;
         }
 
         if (isMounted) {
-          setActiveUrl(rawUrl);
+          setActiveUrl(rawUrl || null);
           setIsLoading(false);
         }
       } catch (err) {
         console.warn('Error resolving preview URL:', err);
         if (isMounted) {
+          setActiveUrl(null);
           setIsLoading(false);
         }
       }
@@ -150,10 +130,10 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const handleOpenInNewTab = () => {
     if (activeUrl) {
       window.open(activeUrl, '_blank');
-    } else {
-      const blob = generateSampleDocumentBlob(file, submissionId, applicantName);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+    } else if (file.googleDriveViewUrl) {
+      window.open(file.googleDriveViewUrl, '_blank');
+    } else if (file.cloudStorageUrl) {
+      window.open(file.cloudStorageUrl, '_blank');
     }
   };
 
@@ -173,7 +153,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-800 text-emerald-100 border border-emerald-600 text-[10px] font-semibold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
-                  {file.googleDriveViewUrl ? 'Google Drive Kantor' : file.cloudStorageUrl ? 'Cloud Storage' : file.fileChunkId ? 'Arsip Berkas Asli' : 'Tersimpan di Sistem'}
+                  {file.googleDriveViewUrl ? 'Google Drive Kantor' : file.cloudStorageUrl ? 'Cloud Storage' : 'Berkas Pemohon'}
                 </span>
               </div>
               <p className="text-xs text-emerald-100">
@@ -192,13 +172,15 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               <span className="hidden sm:inline">Unduh Berkas</span>
             </button>
 
-            <button
-              onClick={handleOpenInNewTab}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
-              title="Buka di Tab Baru"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </button>
+            {(activeUrl || file.googleDriveViewUrl || file.cloudStorageUrl) && (
+              <button
+                onClick={handleOpenInNewTab}
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
+                title="Buka di Tab Baru"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               onClick={onClose}
@@ -215,7 +197,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1.5 text-emerald-800 font-semibold">
               <ShieldCheck className="w-4 h-4 text-emerald-700" />
-              <span>Arsip Digital Terverifikasi Bimas Islam Gowa</span>
+              <span>Pemeriksaan Berkas Unggahan Pemohon</span>
             </span>
             <span className="hidden md:inline text-slate-300">|</span>
             <span className="hidden md:inline text-slate-600 font-mono">
@@ -297,74 +279,79 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               </object>
             </div>
           ) : (
-            /* Digital Archive Certificate & Structured Preview */
+            /* Detailed File Metadata & Verification Info */
             <div 
               style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-              className="w-full max-w-2xl bg-white text-slate-900 rounded-xl p-8 shadow-sm border border-slate-200 transition-transform duration-200 font-serif leading-relaxed"
+              className="w-full max-w-xl bg-white text-slate-900 rounded-xl p-6 sm:p-8 shadow-sm border border-slate-200 transition-transform duration-200"
             >
-              <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
-                <div className="text-xs font-bold tracking-widest uppercase text-emerald-800 font-sans">
-                  KEMENTERIAN AGAMA REPUBLIK INDONESIA
+              <div className="flex items-center gap-3 border-b border-slate-200 pb-4 mb-5">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 flex-shrink-0">
+                  <FileText className="w-6 h-6" />
                 </div>
-                <h4 className="text-base font-black tracking-wide text-slate-900 uppercase font-sans mt-0.5">
-                  KANTOR KEMENTERIAN AGAMA KABUPATEN GOWA
-                </h4>
-                <div className="text-xs font-bold text-emerald-700 font-sans">
-                  SEKSI BIMBINGAN MASYARAKAT ISLAM
+                <div>
+                  <h4 className="text-base font-bold text-slate-900">
+                    {file.fileName}
+                  </h4>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Kategori Syarat: <span className="text-emerald-800 font-semibold">{file.label}</span>
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-500 font-sans italic mt-1">
-                  Portal Resmi MALA'BIRI • Jl. Jenderal Sudirman No. 10, Sungguminasa, Kab. Gowa
-                </p>
               </div>
 
-              <div className="text-center mb-6">
-                <span className="text-xs font-bold font-sans uppercase px-3 py-1 bg-emerald-50 text-emerald-800 rounded-full border border-emerald-200">
-                  Arsip Berkas Digital Pemohon
-                </span>
-                <h5 className="text-lg font-bold text-slate-900 mt-2 underline">
-                  {file.label}
-                </h5>
-                <p className="text-xs font-mono text-slate-500 mt-1">
-                  Nama Berkas: {file.fileName}
-                </p>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 font-sans text-xs space-y-1.5">
-                <div className="flex justify-between">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5 text-xs space-y-2">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-500">Nomor Registrasi:</span>
-                  <strong className="font-mono text-emerald-700 font-bold">{submissionId || 'MLB-2026-ARCHIVE'}</strong>
+                  <strong className="font-mono text-emerald-800 font-bold">{submissionId || '-'}</strong>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-500">Pemohon / Lembaga:</span>
                   <strong className="text-slate-800">{applicantName || 'Pemohon Layanan'}</strong>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Ukuran & Tipe Berkas:</span>
-                  <span className="font-mono text-slate-700">{(file.fileSize / (1024 * 1024)).toFixed(2)} MB ({file.fileType || 'PDF'})</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Ukuran & Format:</span>
+                  <span className="font-mono text-slate-700 font-medium">
+                    {(file.fileSize / (1024 * 1024)).toFixed(2)} MB • {file.fileType || 'Dokumen'}
+                  </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-500">Waktu Pengunggahan:</span>
-                  <span className="text-slate-700">{new Date(file.uploadedAt).toLocaleString('id-ID')}</span>
+                  <span className="text-slate-700 font-medium">{new Date(file.uploadedAt).toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Lokasi Penyimpanan:</span>
+                  <span className="text-emerald-700 font-semibold">
+                    {file.googleDriveViewUrl ? 'Google Drive Kantor' : file.cloudStorageUrl ? 'Firebase Storage' : 'Sistem Unggahan MALA\'BIRI'}
+                  </span>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-700 text-justify mb-6">
-                Dokumen digital ini merupakan lampiran persyaratan resmi yang diunggah oleh masyarakat melalui portal MALA'BIRI Seksi Bimbingan Masyarakat Islam Kantor Kementerian Agama Kabupaten Gowa. Berkas tersimpan dengan aman pada penyimpanan digital sistem dan dapat diunduh untuk verifikasi administrasi maupun penelaahan teknis.
-              </p>
+              <div className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-200 text-xs text-slate-700 space-y-1 mb-5">
+                <p className="font-semibold text-emerald-900">Informasi Pemeriksaan Berkas:</p>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  Berkas ini merupakan berkas fisik asli yang diunggah oleh pemohon melalui formulir layanan MALA'BIRI. Petugas dapat mengunduh berkas langsung ke komputer atau membukanya di Google Drive untuk memeriksa kelengkapan persyaratan.
+                </p>
+              </div>
 
-              <div className="border-t border-slate-200 pt-6 flex justify-between items-end font-sans">
-                <div className="text-center p-3 rounded-xl border border-emerald-500 bg-emerald-50/50 text-emerald-800 text-[10px] font-bold">
-                  <div>✓ TERSIMPAN DIGITAL</div>
-                  <div className="text-[9px] font-normal text-emerald-600 mt-0.5">Seksi Bimas Islam Kemenag Gowa</div>
-                </div>
-
-                <div className="text-right text-xs">
-                  <p className="text-slate-500">Sungguminasa, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                  <p className="font-bold text-slate-800 mt-1">Petugas Verifikator Bimas Islam,</p>
-                  <div className="h-10"></div>
-                  <p className="font-bold text-slate-900 underline">Tim Administrasi Digital</p>
-                  <p className="text-[10px] text-slate-500 font-mono">NIP. 199003142019031008</p>
-                </div>
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                {file.googleDriveViewUrl && (
+                  <a
+                    href={file.googleDriveViewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-xs inline-flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Buka File di Drive</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh Berkas Ini</span>
+                </button>
               </div>
             </div>
           )}
@@ -374,7 +361,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         <div className="bg-white px-6 py-3.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs flex-shrink-0">
           <div className="text-slate-500 text-[11px] flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Dokumen dapat langsung disimpan ke harddisk/komputer verifikator</span>
+            <span>Dokumen asli dapat langsung disimpan ke harddisk/komputer verifikator</span>
           </div>
 
           <div className="flex items-center gap-2">

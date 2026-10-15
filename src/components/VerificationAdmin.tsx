@@ -34,9 +34,7 @@ import {
   Edit2,
   Archive,
   Plus,
-  Link2,
-  CheckSquare,
-  Square
+  Link2
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { 
@@ -50,13 +48,10 @@ import {
   updateSubmissionStatus, 
   clearAllSubmissions, 
   deleteSubmission, 
-  deleteMultipleSubmissions,
   updateSubmissionApplicant, 
   isTimestampOrDateString, 
   isLooksLikeServiceName,
-  removeFileFromSubmission,
-  removeMarkedFilesFromSubmission,
-  removeAllFilesFromSubmission,
+  isPureUploadedFile,
   scanAndRecoverAllDriveFiles,
   extractAllDriveFilesFromSubmission,
   repairSubmissionFields
@@ -211,104 +206,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       alert('Gagal memindai berkas: ' + e.message);
     } finally {
       setIsScanningDrive(false);
-    }
-  };
-
-  // State untuk penandaan berkas di modal verifikasi
-  const [selectedFileIndices, setSelectedFileIndices] = useState<number[]>([]);
-  // State untuk penandaan baris permohonan di tabel
-  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
-
-  const toggleSelectFile = (idx: number) => {
-    setSelectedFileIndices(prev =>
-      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
-    );
-  };
-
-  const handleSelectAllFiles = (total: number) => {
-    if (selectedFileIndices.length === total) {
-      setSelectedFileIndices([]);
-    } else {
-      setSelectedFileIndices(Array.from({ length: total }, (_, i) => i));
-    }
-  };
-
-  const handleDeleteMarkedFiles = async () => {
-    if (!selectedSubmission || selectedFileIndices.length === 0) return;
-    if (!window.confirm(`Hapus ${selectedFileIndices.length} berkas yang Anda tandai dari permohonan ini?`)) return;
-    try {
-      const updated = await removeMarkedFilesFromSubmission(selectedSubmission.id, selectedFileIndices);
-      if (updated) {
-        setSelectedSubmission(updated);
-        setSelectedFileIndices([]);
-        onRefreshSubmissions();
-        setAttachNotice(`Berhasil menghapus ${selectedFileIndices.length} berkas yang ditandai.`);
-        setTimeout(() => setAttachNotice(null), 3000);
-      }
-    } catch (err: any) {
-      alert('Gagal menghapus berkas: ' + (err?.message || err));
-    }
-  };
-
-  const handleDeleteAllFilesFromModal = async () => {
-    if (!selectedSubmission) return;
-    const count = selectedSubmission.files?.length || 0;
-    if (count === 0) return;
-    if (!window.confirm(`PERINGATAN: Apakah Anda yakin ingin menghapus SELURUH (${count}) berkas yang diupload pemohon ini?`)) return;
-    try {
-      const updated = await removeAllFilesFromSubmission(selectedSubmission.id);
-      if (updated) {
-        setSelectedSubmission(updated);
-        setSelectedFileIndices([]);
-        onRefreshSubmissions();
-        setAttachNotice('Seluruh berkas berhasil dihapus.');
-        setTimeout(() => setAttachNotice(null), 3000);
-      }
-    } catch (err: any) {
-      alert('Gagal menghapus semua berkas: ' + (err?.message || err));
-    }
-  };
-
-  const handleRemoveFile = async (subId: string, idx: number) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus berkas lampiran ini?')) return;
-    try {
-      const updated = await removeFileFromSubmission(subId, idx);
-      if (updated) {
-        if (selectedSubmission && selectedSubmission.id === subId) {
-          setSelectedSubmission(updated);
-          setSelectedFileIndices(prev => prev.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
-        }
-        onRefreshSubmissions();
-      }
-    } catch (err: any) {
-      alert('Gagal menghapus berkas: ' + err.message);
-    }
-  };
-
-  const toggleSelectSubmission = (id: string) => {
-    setSelectedSubmissionIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllVisibleSubmissions = (visibleIds: string[]) => {
-    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedSubmissionIds.includes(id));
-    if (allSelected) {
-      setSelectedSubmissionIds(prev => prev.filter(id => !visibleIds.includes(id)));
-    } else {
-      setSelectedSubmissionIds(prev => Array.from(new Set([...prev, ...visibleIds])));
-    }
-  };
-
-  const handleDeleteMarkedSubmissions = async () => {
-    if (selectedSubmissionIds.length === 0) return;
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedSubmissionIds.length} data permohonan yang ditandai beserta seluruh berkasnya?`)) return;
-    try {
-      await deleteMultipleSubmissions(selectedSubmissionIds);
-      setSelectedSubmissionIds([]);
-      onRefreshSubmissions();
-    } catch (err: any) {
-      alert('Gagal menghapus data permohonan: ' + (err?.message || err));
     }
   };
 
@@ -503,13 +400,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
   const openVerificationModal = (sub: SubmissionRecord) => {
     const repaired = repairSubmissionFields(sub);
-    const effectiveFiles = extractAllDriveFilesFromSubmission(repaired);
+    const validFiles = (Array.isArray(repaired.files) ? repaired.files : []).filter(isPureUploadedFile);
     const finalizedSub: SubmissionRecord = {
       ...repaired,
-      files: effectiveFiles.length > (repaired.files?.length || 0) ? effectiveFiles : (repaired.files || [])
+      files: validFiles
     };
     setSelectedSubmission(finalizedSub);
-    setSelectedFileIndices([]);
     setNewStatus(finalizedSub.status || 'VERIFYING');
     // Kosongkan catatan admin yang akan terkirim ke WA pemohon secara default
     setOfficerNote('');
@@ -641,7 +537,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    const prefix = activeViewTab === 'CURRENT_MONTH' ? 'bulan_berjalan' : 'riwayat_arsip';
+    const prefix = activeViewTab === 'CURRENT_MONTH' ? 'bulan_berjalan' : 'riwayat';
     link.setAttribute('download', `rekap_layanan_${prefix}_malabbiri_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
@@ -742,7 +638,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
             {activeViewTab === 'CURRENT_MONTH'
               ? `Menampilkan permohonan layanan aktif pada periode bulan berjalan: ${currentMonthInfo.label}. Pemeriksaan berkas yang diupload dan validasi status permohonan.`
-              : 'Menampilkan arsip seluruh berkas permohonan layanan yang diajukan pada bulan-bulan sebelumnya.'}
+              : 'Menampilkan riwayat seluruh permohonan layanan yang diajukan pada bulan-bulan sebelumnya.'}
           </p>
         </div>
 
@@ -770,10 +666,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           <button
             onClick={handlePurgeAllSubmissions}
             className="px-3 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Kosongkan seluruh berkas permohonan"
+            title="Kosongkan seluruh data permohonan"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Kosongkan Arsip</span>
+            <span>Kosongkan Data</span>
           </button>
 
           <button
@@ -839,7 +735,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           <span>
             {activeViewTab === 'CURRENT_MONTH'
               ? `Layanan aktif yang tampil pada panel saat ini adalah bulan berjalan (${currentMonthInfo.label}).`
-              : 'Layanan bulan-bulan lalu telah otomatis diarsipkan ke menu Riwayat ini.'}
+              : 'Layanan bulan-bulan lalu telah otomatis masuk ke menu Riwayat ini.'}
           </span>
         </div>
       </div>
@@ -848,7 +744,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
           <span className="text-xs text-slate-500 font-medium block mb-1">
-            {activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Arsip'}
+            {activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Layanan'}
           </span>
           <span className="text-2xl font-bold text-slate-900">{activePool.length}</span>
           <span className="text-[10px] text-slate-500 block mt-1 font-medium">
@@ -986,47 +882,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
       {/* Submissions Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-        {/* Banner Aksi Jika Ada Baris yang Ditandai */}
-        {selectedSubmissionIds.length > 0 && (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 animate-in fade-in">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
-              <CheckSquare className="w-4 h-4 text-emerald-700" />
-              <span>{selectedSubmissionIds.length} permohonan ditandai</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleDeleteMarkedSubmissions}
-                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-                title="Hapus seluruh data permohonan yang telah ditandai"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Hapus Semua File & Data Ditandai ({selectedSubmissionIds.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedSubmissionIds([])}
-                className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Batal Tandai
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700">
             <thead className="bg-slate-100 text-[11px] uppercase font-bold text-slate-700 border-b border-slate-200">
               <tr>
-                <th className="px-3 py-3.5 text-center w-10">
-                  <input
-                    type="checkbox"
-                    checked={filteredList.length > 0 && filteredList.every(s => selectedSubmissionIds.includes(s.id))}
-                    onChange={() => handleSelectAllVisibleSubmissions(filteredList.map(s => s.id).filter(Boolean))}
-                    className="w-4 h-4 text-emerald-700 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
-                    title="Tandai / Batalkan Semua Permohonan yang Tampil"
-                  />
-                </th>
                 <th className="px-4 py-3.5 text-slate-700">ID Tiket</th>
                 <th className="px-4 py-3.5 text-slate-700">Tanggal</th>
                 <th className="px-4 py-3.5 text-slate-700">Layanan</th>
@@ -1039,21 +898,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
               {filteredList.map((sub) => {
-                const extracted = extractAllDriveFilesFromSubmission(sub);
-                const effectiveFiles = (extracted.length > (sub.files?.length || 0)) ? extracted : ((sub.files && sub.files.length > 0) ? sub.files : extracted);
+                const effectiveFiles = (Array.isArray(sub.files) ? sub.files : []).filter(isPureUploadedFile);
                 const filesCount = effectiveFiles.length;
-                const isRowSelected = selectedSubmissionIds.includes(sub.id);
                 return (
-                <tr key={sub.id || Math.random().toString()} className={`hover:bg-slate-50 transition-colors ${isRowSelected ? 'bg-emerald-50/40' : ''}`}>
-                  <td className="px-3 py-3.5 text-center w-10">
-                    <input
-                      type="checkbox"
-                      checked={isRowSelected}
-                      onChange={() => toggleSelectSubmission(sub.id)}
-                      className="w-4 h-4 text-emerald-700 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
-                      title="Tandai permohonan ini"
-                    />
-                  </td>
+                <tr key={sub.id || Math.random().toString()} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3.5 font-mono font-bold text-emerald-800 whitespace-nowrap">
                     {sub.id || '-'}
                   </td>
@@ -1431,51 +1279,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
                   <div className="flex items-center gap-2 flex-wrap">
                     {Array.isArray(selectedSubmission.files) && selectedSubmission.files.length > 0 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectAllFiles(selectedSubmission.files?.length || 0)}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Tandai semua berkas untuk aksi bersama"
-                        >
-                          <CheckSquare className="w-3.5 h-3.5 text-slate-600" />
-                          <span>
-                            {selectedFileIndices.length === selectedSubmission.files.length ? 'Batal Tandai Semua' : 'Tandai Semua'}
-                          </span>
-                        </button>
-
-                        {selectedFileIndices.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleDeleteMarkedFiles}
-                            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer animate-in fade-in"
-                            title="Hapus seluruh berkas yang Anda tandai"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Hapus {selectedFileIndices.length} Berkas Ditandai</span>
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={handleDeleteAllFilesFromModal}
-                          className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Hapus seluruh berkas yang ada pada permohonan ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Hapus Semua File</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => downloadAllFilesBatch(selectedSubmission.files || [], selectedSubmission.id, selectedSubmission.applicantName)}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                          title="Unduh semua berkas pemohon ini sekaligus ke komputer"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Unduh Semua</span>
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => downloadAllFilesBatch(selectedSubmission.files || [], selectedSubmission.id, selectedSubmission.applicantName)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                        title="Unduh semua berkas pemohon ini sekaligus ke komputer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Unduh Semua ({selectedSubmission.files.length})</span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1495,41 +1307,20 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   </div>
                 )}
 
-                {/* Daftar Berkas dengan Checkbox Penandaan */}
+                {/* Daftar Berkas */}
                 <div className="space-y-2">
                   {(Array.isArray(selectedSubmission.files) ? selectedSubmission.files : []).map((file, idx) => {
-                    const isMarked = selectedFileIndices.includes(idx);
                     return (
                     <div
                       key={idx}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border transition-all gap-2 ${
-                        isMarked 
-                          ? 'bg-rose-50/60 border-rose-300 ring-1 ring-rose-300' 
-                          : 'bg-slate-50 border-slate-200 hover:border-emerald-600'
-                      }`}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 hover:border-emerald-600 transition-all gap-2"
                     >
                       <div className="flex items-center gap-3 truncate flex-1">
-                        <input
-                          type="checkbox"
-                          checked={isMarked}
-                          onChange={() => toggleSelectFile(idx)}
-                          className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer flex-shrink-0"
-                          title="Tandai berkas ini untuk dihapus"
-                        />
-                        <div className={`p-2 rounded-lg flex-shrink-0 border ${
-                          isMarked ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}>
+                        <div className="p-2 rounded-lg flex-shrink-0 border bg-emerald-50 text-emerald-700 border-emerald-200">
                           <FileText className="w-4 h-4" />
                         </div>
                         <div className="truncate">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-slate-900 truncate text-xs">{file.fileName}</p>
-                            {isMarked && (
-                              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                                Ditandai
-                              </span>
-                            )}
-                          </div>
+                          <p className="font-semibold text-slate-900 truncate text-xs">{file.fileName}</p>
                           <p className="text-[11px] text-slate-500 font-medium">{file.label}</p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[10px] font-mono text-emerald-700 font-medium">
@@ -1583,15 +1374,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Unduh</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFile(selectedSubmission.id, idx)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
-                          title="Hapus berkas ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
