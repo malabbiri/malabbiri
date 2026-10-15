@@ -63,6 +63,7 @@ export interface SubmissionRecord {
   statusHistory: StatusHistoryItem[];
   formData: Record<string, any>;
   files: UploadedFileInfo[];
+  fileUrls?: string;
   checklistConfirmed?: string[];
   officerNotes?: string;
   verificationCode: string;

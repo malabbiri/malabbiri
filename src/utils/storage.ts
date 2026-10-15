@@ -1186,24 +1186,79 @@ export async function scanAndRecoverAllDriveFiles(): Promise<{ totalRecovered: n
 }
 
 /**
- * Menghapus berkas yang tertaut pada permohonan
+ * Menghapus satu atau banyak berkas dari permohonan secara bersih
+ * (membersihkan juga dari formData & fileUrls agar tidak terangkat kembali).
  */
 export async function removeFileFromSubmission(
   submissionId: string,
   fileIndex: number
+): Promise<SubmissionRecord | null> {
+  return removeMarkedFilesFromSubmission(submissionId, [fileIndex]);
+}
+
+/**
+ * Menghapus semua berkas yang ditandai (berdasarkan daftar index)
+ */
+export async function removeMarkedFilesFromSubmission(
+  submissionId: string,
+  fileIndices: number[]
 ): Promise<SubmissionRecord | null> {
   const index = cachedSubmissions.findIndex((item) => item.id.toUpperCase() === submissionId.toUpperCase());
   if (index === -1) return null;
 
   const current = cachedSubmissions[index];
   const existingFiles = Array.isArray(current.files) ? [...current.files] : [];
-  if (fileIndex < 0 || fileIndex >= existingFiles.length) return current;
+  if (existingFiles.length === 0) return current;
 
-  existingFiles.splice(fileIndex, 1);
+  // Kumpulkan URL dan nama file yang dihapus untuk pembersihan referensi
+  const removedFiles = fileIndices
+    .filter(idx => idx >= 0 && idx < existingFiles.length)
+    .map(idx => existingFiles[idx]);
+
+  const targetUrls = new Set<string>();
+  const targetNames = new Set<string>();
+  removedFiles.forEach(f => {
+    if (f.googleDriveViewUrl) targetUrls.add(f.googleDriveViewUrl.toLowerCase());
+    if (f.googleDriveDownloadUrl) targetUrls.add(f.googleDriveDownloadUrl.toLowerCase());
+    if (f.cloudStorageUrl) targetUrls.add(f.cloudStorageUrl.toLowerCase());
+    if (f.fileName) targetNames.add(f.fileName.toLowerCase());
+  });
+
+  // Filter berkas yang tersisa
+  const remainingFiles = existingFiles.filter((_, idx) => !fileIndices.includes(idx));
+
+  // Bersihkan juga dari formData jika nilainya merujuk ke URL/nama file yang dihapus
+  const updatedFormData = { ...(current.formData || {}) };
+  Object.keys(updatedFormData).forEach(k => {
+    const val = updatedFormData[k];
+    if (typeof val === 'string') {
+      const lower = val.toLowerCase();
+      for (const u of targetUrls) {
+        if (lower.includes(u)) {
+          delete updatedFormData[k];
+          break;
+        }
+      }
+    }
+  });
+
+  // Bersihkan dari fileUrls jika ada
+  let updatedFileUrls = current.fileUrls;
+  if (typeof updatedFileUrls === 'string') {
+    let lower = updatedFileUrls.toLowerCase();
+    for (const u of targetUrls) {
+      if (lower.includes(u)) {
+        updatedFileUrls = undefined;
+        break;
+      }
+    }
+  }
 
   const updatedRecord: SubmissionRecord = {
     ...current,
-    files: existingFiles
+    files: remainingFiles,
+    formData: updatedFormData,
+    fileUrls: updatedFileUrls
   };
 
   cachedSubmissions[index] = updatedRecord;
@@ -1214,9 +1269,45 @@ export async function removeFileFromSubmission(
     const safeData = sanitizeForFirestore(updatedRecord);
     await setDoc(doc(db, 'submissions', submissionId), safeData, { merge: true });
   } catch (err) {
-    console.warn('Failed to delete file from Firestore:', err);
+    console.warn('Failed to delete files from Firestore:', err);
   }
 
   return updatedRecord;
 }
+
+/**
+ * Menghapus seluruh berkas unggahan pada suatu permohonan
+ */
+export async function removeAllFilesFromSubmission(
+  submissionId: string
+): Promise<SubmissionRecord | null> {
+  const index = cachedSubmissions.findIndex((item) => item.id.toUpperCase() === submissionId.toUpperCase());
+  if (index === -1) return null;
+
+  const current = cachedSubmissions[index];
+  const allIndices = Array.isArray(current.files) ? current.files.map((_, i) => i) : [];
+  return removeMarkedFilesFromSubmission(submissionId, allIndices);
+}
+
+/**
+ * Menghapus banyak permohonan sekaligus (bulk delete yang ditandai)
+ */
+export async function deleteMultipleSubmissions(ids: string[]): Promise<boolean> {
+  if (!ids || ids.length === 0) return true;
+  const upperIds = new Set(ids.map(id => id.toUpperCase()));
+  cachedSubmissions = cachedSubmissions.filter((item) => !upperIds.has(item.id.toUpperCase()));
+  saveSubmissions([...cachedSubmissions]);
+  notifySubmissionsListeners();
+
+  // Hapus dari Firestore
+  for (const id of ids) {
+    try {
+      await deleteDoc(doc(db, 'submissions', id));
+    } catch (err) {
+      console.error('Failed to delete submission from Firestore:', err);
+    }
+  }
+  return true;
+}
+
 
