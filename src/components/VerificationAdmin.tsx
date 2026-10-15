@@ -32,11 +32,18 @@ import {
   FileSpreadsheet,
   Award,
   Edit2,
+  Archive,
   Plus,
   Link2
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
-import { formatIndoDate } from '../utils/date';
+import { 
+  formatIndoDate, 
+  isCurrentMonthSubmission, 
+  getCurrentMonthYear, 
+  getSubmissionMonthYear, 
+  INDONESIAN_MONTHS 
+} from '../utils/date';
 import { 
   updateSubmissionStatus, 
   clearAllSubmissions, 
@@ -44,7 +51,6 @@ import {
   updateSubmissionApplicant, 
   isTimestampOrDateString, 
   isLooksLikeServiceName,
-  attachDriveFileToSubmission,
   removeFileFromSubmission,
   scanAndRecoverAllDriveFiles,
   extractAllDriveFilesFromSubmission,
@@ -79,6 +85,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterService, setFilterService] = useState<string>('ALL');
   const [filterDistrict, setFilterDistrict] = useState<string>('ALL');
+
+  // Fitur Riwayat vs Layanan Bulan Berjalan (Default aktif: Bulan Berjalan)
+  const [activeViewTab, setActiveViewTab] = useState<'CURRENT_MONTH' | 'HISTORY'>('CURRENT_MONTH');
+  const [filterHistoryMonth, setFilterHistoryMonth] = useState<string>('ALL');
+  const [filterHistoryYear, setFilterHistoryYear] = useState<string>('ALL');
 
   // Active modal for detailed verification
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionRecord | null>(null);
@@ -199,7 +210,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   };
 
   const handleRemoveFile = async (subId: string, idx: number) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus tautan berkas ini?')) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus berkas lampiran ini?')) return;
     try {
       const updated = await removeFileFromSubmission(subId, idx);
       if (updated) {
@@ -453,7 +464,24 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
   const safeSubmissions = Array.isArray(submissions) ? submissions : [];
 
-  const filteredList = safeSubmissions.filter(sub => {
+  const currentMonthInfo = getCurrentMonthYear();
+
+  // Memisahkan permohonan aktif bulan berjalan vs riwayat bulan-bulan sebelumnya
+  const currentMonthSubmissions = safeSubmissions.filter(s => isCurrentMonthSubmission(s.submittedAt));
+  const historySubmissions = safeSubmissions.filter(s => !isCurrentMonthSubmission(s.submittedAt));
+
+  // Mendapatkan daftar tahun yang ada pada riwayat layanan
+  const historyAvailableYears = Array.from(new Set(
+    historySubmissions.map(s => {
+      const my = getSubmissionMonthYear(s.submittedAt);
+      return my.year.toString();
+    })
+  )).sort((a, b) => Number(b) - Number(a));
+
+  // Pool permohonan yang aktif ditampilkan saat ini
+  const activePool = activeViewTab === 'CURRENT_MONTH' ? currentMonthSubmissions : historySubmissions;
+
+  const filteredList = activePool.filter(sub => {
     if (!sub) return false;
     const id = sub.id || '';
     const applicantName = sub.applicantName || '';
@@ -472,12 +500,23 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     const matchesService = filterService === 'ALL' || serviceId === filterService;
     const matchesDistrict = filterDistrict === 'ALL' || district === filterDistrict;
 
-    return matchesSearch && matchesStatus && matchesService && matchesDistrict;
+    let matchesHistoryTime = true;
+    if (activeViewTab === 'HISTORY') {
+      const my = getSubmissionMonthYear(sub.submittedAt);
+      if (filterHistoryMonth !== 'ALL' && my.month.toString() !== filterHistoryMonth) {
+        matchesHistoryTime = false;
+      }
+      if (filterHistoryYear !== 'ALL' && my.year.toString() !== filterHistoryYear) {
+        matchesHistoryTime = false;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesService && matchesDistrict && matchesHistoryTime;
   });
 
-  const countPending = safeSubmissions.filter(s => s && (s.status === 'SUBMITTED' || s.status === 'VERIFYING')).length;
-  const countApproved = safeSubmissions.filter(s => s && (s.status === 'APPROVED' || s.status === 'COMPLETED')).length;
-  const countRevision = safeSubmissions.filter(s => s && s.status === 'REVISION_NEEDED').length;
+  const countPending = activePool.filter(s => s && (s.status === 'SUBMITTED' || s.status === 'VERIFYING')).length;
+  const countApproved = activePool.filter(s => s && (s.status === 'APPROVED' || s.status === 'COMPLETED')).length;
+  const countRevision = activePool.filter(s => s && s.status === 'REVISION_NEEDED').length;
 
   const exportToCSV = () => {
     const getStatusIndonesian = (st: string) => {
@@ -515,7 +554,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `rekap_layanan_malabbiri_${new Date().toISOString().slice(0,10)}.csv`);
+    const prefix = activeViewTab === 'CURRENT_MONTH' ? 'bulan_berjalan' : 'riwayat_arsip';
+    link.setAttribute('download', `rekap_layanan_${prefix}_malabbiri_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -610,10 +650,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             <span>Dashboard Verifikasi Petugas Bimas Islam</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
-            Panel Verifikasi & Validasi Dokumen
+            {activeViewTab === 'CURRENT_MONTH' ? 'Panel Layanan Bulan Berjalan' : 'Panel Riwayat Layanan'}
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
-            Pemeriksaan kelengkapan berkas, validasi status permohonan, pratinjau dokumen pemohon, dan notifikasi otomatis WhatsApp.
+            {activeViewTab === 'CURRENT_MONTH'
+              ? `Menampilkan permohonan layanan aktif pada periode bulan berjalan: ${currentMonthInfo.label}. Pemeriksaan berkas yang diupload dan validasi status permohonan.`
+              : 'Menampilkan arsip seluruh berkas permohonan layanan yang diajukan pada bulan-bulan sebelumnya.'}
           </p>
         </div>
 
@@ -665,13 +707,66 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
       </div>
 
+      {/* Tab Navigasi: Layanan Bulan Berjalan vs Riwayat Layanan */}
+      <div className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setActiveViewTab('CURRENT_MONTH')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              activeViewTab === 'CURRENT_MONTH'
+                ? 'bg-emerald-800 text-white shadow-emerald-950/20'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Calendar className={`w-4 h-4 ${activeViewTab === 'CURRENT_MONTH' ? 'text-emerald-300' : 'text-slate-500'}`} />
+            <span>Layanan Bulan Berjalan ({currentMonthInfo.label})</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeViewTab === 'CURRENT_MONTH' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {currentMonthSubmissions.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveViewTab('HISTORY')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              activeViewTab === 'HISTORY'
+                ? 'bg-emerald-800 text-white shadow-emerald-950/20'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Clock className={`w-4 h-4 ${activeViewTab === 'HISTORY' ? 'text-emerald-300' : 'text-slate-500'}`} />
+            <span>Riwayat Layanan (Bulan Lalu)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeViewTab === 'HISTORY' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {historySubmissions.length}
+            </span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-slate-600 font-medium px-2 py-1 flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
+          <span>
+            {activeViewTab === 'CURRENT_MONTH'
+              ? `Layanan aktif yang tampil pada panel saat ini adalah bulan berjalan (${currentMonthInfo.label}).`
+              : 'Layanan bulan-bulan lalu telah otomatis diarsipkan ke menu Riwayat ini.'}
+          </span>
+        </div>
+      </div>
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs text-slate-500 font-medium block mb-1">Total Permohonan</span>
-          <span className="text-2xl font-bold text-slate-900">{submissions.length}</span>
-          <span className="text-[10px] text-slate-500 block mt-1 font-medium">Seluruh layanan digital</span>
+          <span className="text-xs text-slate-500 font-medium block mb-1">
+            {activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Arsip'}
+          </span>
+          <span className="text-2xl font-bold text-slate-900">{activePool.length}</span>
+          <span className="text-[10px] text-slate-500 block mt-1 font-medium">
+            {activeViewTab === 'CURRENT_MONTH' ? `Periode ${currentMonthInfo.label}` : 'Seluruh bulan-bulan lalu'}
+          </span>
         </div>
 
         <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200 shadow-xs">
@@ -695,7 +790,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
       {/* Filters Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${activeViewTab === 'HISTORY' ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} gap-3`}>
           {/* Search */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -757,6 +852,48 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               ))}
             </select>
           </div>
+
+          {/* Khusus Tab Riwayat: Filter Bulan & Tahun */}
+          {activeViewTab === 'HISTORY' && (
+            <>
+              <div>
+                <select
+                  value={filterHistoryMonth}
+                  onChange={(e) => setFilterHistoryMonth(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-amber-50/80 border border-amber-300 text-xs text-amber-950 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                  title="Pilih Bulan Riwayat Layanan"
+                >
+                  <option value="ALL">Semua Bulan Riwayat</option>
+                  {INDONESIAN_MONTHS.map((mName, mIdx) => (
+                    <option key={mIdx} value={mIdx.toString()}>
+                      Bulan {mName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={filterHistoryYear}
+                  onChange={(e) => setFilterHistoryYear(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-amber-50/80 border border-amber-300 text-xs text-amber-950 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                  title="Pilih Tahun Riwayat Layanan"
+                >
+                  <option value="ALL">Semua Tahun Riwayat</option>
+                  {historyAvailableYears.map(yr => (
+                    <option key={yr} value={yr}>
+                      Tahun {yr}
+                    </option>
+                  ))}
+                  {historyAvailableYears.length === 0 && (
+                    <option value={new Date().getFullYear().toString()}>
+                      Tahun {new Date().getFullYear()}
+                    </option>
+                  )}
+                </select>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -868,15 +1005,26 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                     })()}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-2xs transition-colors cursor-pointer"
-                      title="Klik untuk membuka & memeriksa berkas"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>{filesCount} file</span>
-                    </button>
+                    {filesCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md border border-emerald-200 shadow-2xs transition-colors cursor-pointer"
+                        title="Klik untuk langsung memeriksa berkas yang diunggah pemohon"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>{filesCount} File Upload</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
+                        className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 font-medium px-2 py-1 rounded bg-slate-50 border border-slate-200 cursor-pointer"
+                        title="Periksa permohonan (0 file terunggah)"
+                      >
+                        <span>0 File Upload</span>
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {sub.status === 'APPROVED' && (
@@ -1140,10 +1288,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   <div>
                     <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                       <FolderDown className="w-4 h-4 text-emerald-700" />
-                      <span>Lampiran Berkas yang Diunggah ({Array.isArray(selectedSubmission.files) ? selectedSubmission.files.length : 0} File):</span>
+                      <span>Berkas yang Diupload Pemohon ({Array.isArray(selectedSubmission.files) ? selectedSubmission.files.length : 0} File):</span>
                     </h4>
                     <p className="text-[10px] text-slate-500 font-medium">
-                      Tersimpan di Basis Data MALA'BIRI & Google Drive • Pratinjau dokumen atau unduh file asli
+                      Berkas asli yang diunggah oleh pemohon untuk diperiksa oleh petugas verifikator
                     </p>
                   </div>
 
@@ -1173,7 +1321,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 {/* Empty State jika belum ada berkas */}
                 {(!Array.isArray(selectedSubmission.files) || selectedSubmission.files.length === 0) && (
                   <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-slate-500 text-xs font-medium">
-                    Tidak ada berkas lampiran yang diunggah untuk permohonan ini.
+                    Tidak ada berkas yang diupload oleh pemohon untuk permohonan ini.
                   </div>
                 )}
 
@@ -1205,7 +1353,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                                   ? 'bg-purple-50 border-purple-200 text-purple-800' 
                                   : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                             }`}>
-                              {file.googleDriveViewUrl ? 'Google Drive' : file.cloudStorageUrl ? 'Firebase Cloud' : 'Tersimpan Digital'}
+                              {file.googleDriveViewUrl ? 'File di Drive' : file.cloudStorageUrl ? 'Firebase Cloud' : 'Berkas Terupload'}
                             </span>
                           </div>
                         </div>
@@ -1218,7 +1366,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                            title="Buka Dokumen Asli di Google Drive Kantor"
+                            title="Buka File Asli di Google Drive"
                           >
                             <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
                             <span>Buka di Drive</span>
@@ -1249,7 +1397,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                           type="button"
                           onClick={() => handleRemoveFile(selectedSubmission.id, idx)}
                           className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
-                          title="Hapus tautan berkas ini"
+                          title="Hapus berkas ini"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

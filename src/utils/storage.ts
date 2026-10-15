@@ -150,14 +150,22 @@ export function repairSubmissionFields(sub: SubmissionRecord): SubmissionRecord 
  * sub.googleDriveUrl, sub.link, sub.berkas, sub.tautan, sub.laporan, sub.notes, dll.
  */
 /**
- * Ekstraksi komprehensif seluruh tautan Google Drive / Google Docs / Cloud / File dari suatu objek permohonan.
- * Memindai seluruh field formData (rekursif), properti permohonan, catatan, dan format Google Form.
+ * Ekstraksi berkas yang diupload oleh pemohon untuk diperiksa oleh petugas verifikator.
+ * Berkas yang dimaksud HANYA berkas yang diunggah oleh pemohon (bukan dokumen digital/spreadsheet/template).
  */
 export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[] {
   if (!sub) return [];
   
-  // 1. Normalisasi berkas yang sudah ada di sub.files (jika ada)
-  const existingFiles: UploadedFileInfo[] = (Array.isArray(sub.files) ? sub.files : []).map((f: any, idx: number) => {
+  // 1. Normalisasi berkas yang sudah ada di sub.files (yang diunggah pemohon)
+  const existingFiles: UploadedFileInfo[] = (Array.isArray(sub.files) ? sub.files : []).filter((f: any) => {
+    if (!f) return false;
+    const rawUrl = f.googleDriveViewUrl || f.url || (typeof f === 'string' ? f : undefined);
+    // Abaikan tautan dokumen digital seperti spreadsheet, google forms, atau google docs non-file
+    if (rawUrl && (rawUrl.includes('docs.google.com/spreadsheets') || rawUrl.includes('docs.google.com/forms'))) {
+      return false;
+    }
+    return true;
+  }).map((f: any, idx: number) => {
     const rawUrl = f.googleDriveViewUrl || f.url || (typeof f === 'string' ? f : undefined);
     const isDrive = rawUrl && (rawUrl.includes('drive.google.com') || rawUrl.includes('docs.google.com'));
     const isFolder = rawUrl && rawUrl.includes('/folders/');
@@ -181,8 +189,8 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
 
     return {
       fieldName: f.fieldName || `file_${idx + 1}`,
-      label: f.label || f.fileName || `Berkas Pengajuan ${idx + 1}`,
-      fileName: f.fileName || `Dokumen_${idx + 1}.${isFolder ? 'zip' : 'pdf'}`,
+      label: f.label || f.fileName || `Berkas Unggahan ${idx + 1}`,
+      fileName: f.fileName || `Dokumen_Upload_${idx + 1}.${isFolder ? 'zip' : 'pdf'}`,
       fileSize: (typeof f.fileSize === 'number' && !isNaN(f.fileSize) && f.fileSize > 0) ? f.fileSize : 1024 * 1024,
       fileType: f.fileType || (isFolder ? 'application/zip' : 'application/pdf'),
       uploadedAt: f.uploadedAt || sub.submittedAt || new Date().toISOString(),
@@ -210,49 +218,40 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     const text = rawVal.trim();
     if (!text) return;
 
-    // Deteksi pola standar Google Form: "Nama_File.pdf (https://drive.google.com/open?id=...)"
+    // Abaikan jika text adalah link ke spreadsheet atau form (bukan berkas yang diupload)
+    if (text.includes('docs.google.com/spreadsheets') || text.includes('docs.google.com/forms')) {
+      return;
+    }
+
+    // Deteksi pola standar Google Form upload: "Nama_File.pdf (https://drive.google.com/open?id=...)"
     const gFormMatch = text.match(/^(.+?)\s*\((https?:\/\/[^\)]+)\)$/);
     if (gFormMatch) {
       const explicitName = gFormMatch[1].trim();
       const explicitUrl = gFormMatch[2].trim();
-      if (!foundCandidates.some(c => c.url.toLowerCase() === explicitUrl.toLowerCase())) {
+      if (!explicitUrl.includes('spreadsheets') && !explicitUrl.includes('forms') && !foundCandidates.some(c => c.url.toLowerCase() === explicitUrl.toLowerCase())) {
         foundCandidates.push({
           url: explicitUrl,
-          label: explicitName || rawLabel || 'Berkas Google Drive',
-          fieldName: rawField || 'drive_file',
+          label: explicitName || rawLabel || 'Berkas Upload Pemohon',
+          fieldName: rawField || 'upload_file',
           originalFileName: explicitName
         });
       }
+      return;
     }
 
-    // Ekstraksi seluruh URL (http/https, drive.google.com, docs.google.com, bit.ly, s.id, dsb.)
-    const urlPattern = /(?:https?:\/\/|drive\.google\.com\/|docs\.google\.com\/)[^\s,;"'<>\)\]]+/gi;
+    // Ekstraksi seluruh URL berkas Google Drive / Cloud
+    const urlPattern = /(?:https?:\/\/|drive\.google\.com\/)[^\s,;"'<>\)\]]+/gi;
     const matches: string[] = (text.match(urlPattern) as string[] | null) || [];
-
-    // Deteksi jika text adalah nama berkas (memiliki ekstensi .pdf, .docx, .doc, .xlsx, .jpg, .png, dsb.)
-    const fileExtMatch = text.match(/\.(pdf|docx?|xlsx?|jpe?g|png|webp|zip|rar)$/i);
-    const isFileField = rawField && (rawField.startsWith('file_') || /(?:file|berkas|dokumen|lampiran|upload|laporan)/i.test(rawField));
-    if ((fileExtMatch || isFileField) && matches.length === 0 && text.length >= 3 && text !== '-' && text !== 'null' && text !== 'undefined' && text !== 'true' && text !== 'false') {
-      const cleanLabel = (rawLabel || '')
-        .replace(/_/g, ' ')
-        .replace(/^col\s*\d+\s*/i, '')
-        .replace(/^[0-9]+\.\s*/, '')
-        .trim();
-      const fileName = fileExtMatch ? text : `${(cleanLabel || 'Dokumen').replace(/\s+/g, '_')}.pdf`;
-      if (!foundCandidates.some(c => (c.originalFileName && c.originalFileName.toLowerCase() === fileName.toLowerCase()) || c.label.toLowerCase() === cleanLabel.toLowerCase())) {
-        foundCandidates.push({
-          url: '',
-          label: cleanLabel || 'Berkas Terlampir',
-          fieldName: rawField || 'drive_file',
-          originalFileName: fileName
-        });
-      }
-    }
 
     matches.forEach((u) => {
       let clean = u.replace(/[.,;:\)\]"'>]+$/, '').trim();
       if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
         clean = `https://${clean}`;
+      }
+
+      // Pastikan bukan link spreadsheet atau formulir
+      if (clean.includes('spreadsheets') || clean.includes('docs.google.com/forms')) {
+        return;
       }
 
       if (!foundCandidates.some(c => c.url.toLowerCase() === clean.toLowerCase())) {
@@ -263,25 +262,30 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
           .trim();
         foundCandidates.push({
           url: clean,
-          label: cleanLabel || 'Berkas Google Drive',
-          fieldName: rawField || 'drive_file'
+          label: cleanLabel || 'Berkas Upload Pemohon',
+          fieldName: rawField || 'upload_file'
         });
       }
     });
   };
 
-  // 1. Pindai seluruh properti langsung pada objek permohonan
-  Object.entries(sub).forEach(([k, v]) => {
-    if (k === 'id' || k === 'verificationCode' || k === 'status' || k === 'statusHistory' || k === 'checklistConfirmed') return;
-    addCandidate(v, k, k);
-  });
+  // Pindai sub.formData, sub.fileUrls, dll untuk menemukan berkas yang diunggah
+  if (sub.formData && typeof sub.formData === 'object') {
+    Object.entries(sub.formData).forEach(([k, v]) => {
+      addCandidate(v, k, k);
+    });
+  }
+  if (sub.fileUrls) {
+    addCandidate(sub.fileUrls, 'Berkas Upload', 'fileUrls');
+  }
 
-  // 2. Bangun daftar berkas terverifikasi
+  // Bangun daftar berkas terverifikasi
   const resultFiles = [...existingFiles];
 
   foundCandidates.forEach((candidate) => {
     const u = candidate.url;
-    // Cek apakah URL atau nama berkas sudah tercatat di resultFiles
+    if (!u) return; // Hanya berkas riil dengan link/data yang diupload
+
     const alreadyListed = resultFiles.some((ef) => {
       if (candidate.originalFileName && ef.fileName && ef.fileName.toLowerCase() === candidate.originalFileName.toLowerCase()) return true;
       if (u && ef.googleDriveViewUrl && ef.googleDriveViewUrl.toLowerCase() === u.toLowerCase()) return true;
@@ -299,10 +303,8 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     });
 
     if (!alreadyListed) {
-      const isDrive = !!(u && (u.includes('drive.google.com') || u.includes('docs.google.com')));
+      const isDrive = !!(u && u.includes('drive.google.com'));
       const isFolder = !!(u && u.includes('/folders/'));
-      const isDoc = !!(u && u.includes('docs.google.com/document'));
-      const isSheet = !!(u && u.includes('docs.google.com/spreadsheets'));
       const isImage = !!(u && /\.(jpe?g|png|webp|gif)($|\?)/i.test(u)) || (candidate.originalFileName && /\.(jpe?g|png|webp|gif)$/i.test(candidate.originalFileName));
 
       let downloadUrl: string | undefined = undefined;
@@ -323,22 +325,9 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
       }
 
       const fileNum = resultFiles.length + 1;
-      const baseLabel = candidate.label || (sub.serviceTitle ? `${sub.serviceTitle}` : `Berkas ${fileNum}`);
-      let ext = 'pdf';
-      let mimeType = 'application/pdf';
-      if (isFolder) {
-        ext = 'zip';
-        mimeType = 'application/zip';
-      } else if (isSheet) {
-        ext = 'xlsx';
-        mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      } else if (isDoc) {
-        ext = 'docx';
-        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      } else if (isImage) {
-        ext = 'jpg';
-        mimeType = 'image/jpeg';
-      }
+      const baseLabel = candidate.label || `Berkas Upload ${fileNum}`;
+      let ext = isFolder ? 'zip' : (isImage ? 'jpg' : 'pdf');
+      let mimeType = isFolder ? 'application/zip' : (isImage ? 'image/jpeg' : 'application/pdf');
 
       const safeName = (candidate.originalFileName || baseLabel)
         .replace(/[^a-zA-Z0-9_\-\s]/g, '')
@@ -347,9 +336,9 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
         .substring(0, 40);
 
       resultFiles.push({
-        fieldName: candidate.fieldName ? `recovered_${candidate.fieldName}_${fileNum}` : `file_${fileNum}`,
+        fieldName: candidate.fieldName ? `${candidate.fieldName}_${fileNum}` : `file_${fileNum}`,
         label: baseLabel,
-        fileName: candidate.originalFileName || `${safeName || 'Dokumen'}_${fileNum}.${ext}`,
+        fileName: candidate.originalFileName || `${safeName || 'Berkas_Upload'}_${fileNum}.${ext}`,
         fileSize: 1024 * 1024,
         fileType: mimeType,
         uploadedAt: sub.submittedAt || new Date().toISOString(),

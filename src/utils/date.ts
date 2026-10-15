@@ -16,6 +16,60 @@ export function formatIndoDate(dateString?: string | null): string {
   }
 }
 
+export const INDONESIAN_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+export function getCurrentMonthYear(): { month: number; year: number; monthName: string; label: string } {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  const monthName = INDONESIAN_MONTHS[month] || '';
+  return {
+    month,
+    year,
+    monthName,
+    label: `${monthName} ${year}`
+  };
+}
+
+export function isCurrentMonthSubmission(dateString?: string | null): boolean {
+  if (!dateString) return true; // Default to active current month if date undefined
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return true;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  } catch (e) {
+    return true;
+  }
+}
+
+export function getSubmissionMonthYear(dateString?: string | null): { month: number; year: number; monthName: string; label: string } {
+  if (!dateString) return getCurrentMonthYear();
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return getCurrentMonthYear();
+    const month = d.getMonth();
+    const year = d.getFullYear();
+    const monthName = INDONESIAN_MONTHS[month] || '';
+    return {
+      month,
+      year,
+      monthName,
+      label: `${monthName} ${year}`
+    };
+  } catch (e) {
+    return getCurrentMonthYear();
+  }
+}
+
+export function formatIndoMonthYear(dateString?: string | null): string {
+  const my = getSubmissionMonthYear(dateString);
+  return my.label;
+}
+
 export function formatShortDate(dateString?: string | null): string {
   if (!dateString) return '-';
   try {
