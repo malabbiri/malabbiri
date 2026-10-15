@@ -1,6 +1,6 @@
 import { SubmissionRecord, ApplicationStatus, UploadedFileInfo } from '../types';
 import { SERVICES_LIST } from '../data/services';
-import { generateSubmissionId } from './storage';
+import { generateSubmissionId, isPureUploadedFile } from './storage';
 import { resolveAutoKuaName, cleanAndTidyNotes } from './notesHelper';
 
 /**
@@ -254,8 +254,21 @@ export function convertRowsToSubmissions(rows: string[][]): {
     const rawTime = idxTimestamp >= 0 ? row[idxTimestamp] : '';
     const submittedAt = normalizeDate(rawTime);
 
-    // Parse file drive links: Scan seluruh kolom untuk mendeteksi tautan Google Drive / Docs / Cloud
+    // Parse file drive links: Scan seluruh kolom untuk mendeteksi berkas asli yang diunggah pemohon
     const files: UploadedFileInfo[] = [];
+
+    // Helper untuk mengecek apakah suatu URL merupakan file biner asli (bukan spreadsheet/form/doc/folder)
+    const isExcludedDigitalDoc = (u: string) => {
+      const lower = u.toLowerCase();
+      return (
+        lower.includes('spreadsheets') ||
+        lower.includes('docs.google.com/forms') ||
+        lower.includes('docs.google.com/document') ||
+        lower.includes('docs.google.com/presentation') ||
+        lower.includes('/folders/') ||
+        lower.includes('drive.google.com/drive/folders')
+      );
+    };
 
     // 1. Periksa kolom spesifik idxFiles jika ada
     const rawFilesString = idxFiles >= 0 ? (row[idxFiles] || '').trim() : '';
@@ -265,25 +278,28 @@ export function convertRowsToSubmissions(rows: string[][]): {
       matched.forEach((rawUrl: string, uIdx: number) => {
         let url = rawUrl.replace(/[.,;:\)\]"'>]+$/, '').trim();
         if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
+        if (isExcludedDigitalDoc(url)) return;
         if (!files.some(f => f.googleDriveViewUrl === url)) {
           const isDrive = url.includes('drive.google.com') || url.includes('docs.google.com');
-          const isFolder = url.includes('/folders/');
           let dlUrl: string | undefined = undefined;
-          if (isDrive && !isFolder) {
+          if (isDrive) {
             if (url.includes('/view')) dlUrl = url.replace('/view', '/export?format=pdf');
             else if (url.includes('open?id=')) dlUrl = `https://drive.google.com/uc?export=download&id=${url.match(/id=([a-zA-Z0-9_-]+)/)?.[1]}`;
             else if (url.includes('/file/d/')) dlUrl = `https://drive.google.com/uc?export=download&id=${url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1]}`;
           }
-          files.push({
+          const candidateFile: UploadedFileInfo = {
             fieldName: `berkas_${uIdx + 1}`,
-            label: `Berkas Pengajuan Google Drive ${uIdx + 1}`,
-            fileName: isDrive ? `Dokumen_Drive_${uIdx + 1}.${isFolder ? 'zip' : 'pdf'}` : `Dokumen_${uIdx + 1}.pdf`,
+            label: `Berkas Unggahan Pemohon ${uIdx + 1}`,
+            fileName: isDrive ? `Berkas_Upload_${uIdx + 1}.pdf` : `Berkas_${uIdx + 1}.pdf`,
             fileSize: 1024 * 1024,
-            fileType: isFolder ? 'application/zip' : 'application/pdf',
+            fileType: 'application/pdf',
             uploadedAt: submittedAt,
             googleDriveViewUrl: url,
             googleDriveDownloadUrl: dlUrl
-          });
+          };
+          if (isPureUploadedFile(candidateFile)) {
+            files.push(candidateFile);
+          }
         }
       });
     }
@@ -301,31 +317,36 @@ export function convertRowsToSubmissions(rows: string[][]): {
         matchedUrls.forEach((rawUrl: string) => {
           let url = rawUrl.replace(/[.,;:\)\]"'>]+$/, '').trim();
           if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
+          if (isExcludedDigitalDoc(url)) return;
           if (!files.some(f => f.googleDriveViewUrl === url)) {
             const isDrive = url.includes('drive.google.com') || url.includes('docs.google.com');
-            const isFolder = url.includes('/folders/');
             const cleanLabel = colHeader.replace(/^[0-9]+\.\s*/, '').trim();
             const safeFileName = cleanLabel.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
             let dlUrl: string | undefined = undefined;
-            if (isDrive && !isFolder) {
+            if (isDrive) {
               if (url.includes('/view')) dlUrl = url.replace('/view', '/export?format=pdf');
               else if (url.includes('open?id=')) dlUrl = `https://drive.google.com/uc?export=download&id=${url.match(/id=([a-zA-Z0-9_-]+)/)?.[1]}`;
               else if (url.includes('/file/d/')) dlUrl = `https://drive.google.com/uc?export=download&id=${url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1]}`;
             }
-            files.push({
+            const candidateFile: UploadedFileInfo = {
               fieldName: `berkas_col_${c}_${files.length + 1}`,
-              label: cleanLabel || `Dokumen Google Drive ${files.length + 1}`,
-              fileName: isDrive ? `${safeFileName || 'Dokumen_Drive'}_${files.length + 1}.${isFolder ? 'zip' : 'pdf'}` : `Dokumen_${files.length + 1}.pdf`,
+              label: cleanLabel || `Berkas Unggahan ${files.length + 1}`,
+              fileName: isDrive ? `${safeFileName || 'Berkas_Upload'}_${files.length + 1}.pdf` : `Berkas_${files.length + 1}.pdf`,
               fileSize: 1024 * 1024,
-              fileType: isFolder ? 'application/zip' : 'application/pdf',
+              fileType: 'application/pdf',
               uploadedAt: submittedAt,
               googleDriveViewUrl: url,
               googleDriveDownloadUrl: dlUrl
-            });
+            };
+            if (isPureUploadedFile(candidateFile)) {
+              files.push(candidateFile);
+            }
           }
         });
       }
     }
+
+    const cleanFiles = files.filter(isPureUploadedFile);
 
     const rawStatus = idxStatus >= 0 ? (row[idxStatus] || '').trim().toUpperCase() : 'SUBMITTED';
     let status: ApplicationStatus = 'SUBMITTED';

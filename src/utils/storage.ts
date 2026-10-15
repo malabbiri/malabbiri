@@ -35,11 +35,26 @@ export function isLooksLikeServiceName(str?: string, serviceTitle?: string): boo
 }
 
 /**
- * Memeriksa apakah berkas merupakan berkas fisik/unggahan asli dari pemohon,
- * bukan dokumen digital seperti Google Sheets, Formulir Google, Google Docs non-file, atau Google Drive folder.
+ * Memeriksa apakah berkas merupakan berkas fisik/unggahan asli dari pemohon dengan ketaatan 100%.
+ * Berkas yang BUKAN berkas upload pemohon (seperti Google Sheets, Google Forms, Google Docs non-file,
+ * folder Google Drive, dokumen digital bawaan, atau entri tanpa payload file fisik) langsung dieliminasi.
  */
 export function isPureUploadedFile(f: any): boolean {
   if (!f) return false;
+
+  // 1. Berkas fisik WAJIB memiliki data biner nyata (dataUrl / chunk) atau tautan simpanan cloud riil (Drive / Firebase Storage)
+  const hasPayload = Boolean(
+    (f.dataUrl && f.dataUrl.length > 50) || 
+    f.fileChunkId || 
+    f.googleDriveFileId ||
+    f.googleDriveViewUrl || 
+    f.googleDriveDownloadUrl || 
+    f.cloudStorageUrl
+  );
+  if (!hasPayload) {
+    return false;
+  }
+
   const rawUrl = (
     f.googleDriveViewUrl || 
     f.googleDriveDownloadUrl || 
@@ -48,29 +63,44 @@ export function isPureUploadedFile(f: any): boolean {
     (typeof f === 'string' ? f : '')
   ).toLowerCase();
   
-  // Dokumen digital yang BUKAN berkas upload pemohon -> langsung dihapus
+  // 2. Dokumen digital dan tautan web yang BUKAN berkas upload pemohon -> langsung dihapus 100%
   if (
     rawUrl.includes('docs.google.com/spreadsheets') ||
     rawUrl.includes('docs.google.com/forms') ||
     rawUrl.includes('docs.google.com/document') ||
     rawUrl.includes('docs.google.com/presentation') ||
-    rawUrl.includes('/folders/')
+    rawUrl.includes('/folders/') ||
+    rawUrl.includes('drive.google.com/drive/folders')
   ) {
     return false;
   }
 
-  // Nama file atau label yang mengindikasikan spreadsheet / dokumen digital / arsip digital
-  const name = (f.fileName || f.label || '').toLowerCase();
-  if (
-    name.includes('spreadsheet') ||
-    name.includes('formulir tanggapan') ||
-    name.includes('dokumen digital') ||
-    name.includes('arsip digital') ||
-    name.includes('arsip berkas digital') ||
-    name.includes('form responses') ||
-    name.includes('dokumen bawaan')
-  ) {
-    return false;
+  // 3. Nama file atau label yang mengindikasikan spreadsheet / formulir tanggapan / dokumen digital / arsip bawaan
+  const name = (f.fileName || '').toLowerCase();
+  const label = (f.label || '').toLowerCase();
+  const fieldName = (f.fieldName || '').toLowerCase();
+  const combined = `${name} ${label} ${fieldName}`;
+
+  const forbiddenTerms = [
+    'spreadsheet',
+    'formulir tanggapan',
+    'form responses',
+    'dokumen digital',
+    'arsip digital',
+    'arsip berkas digital',
+    'arsip berkas',
+    'dokumen bawaan',
+    'berkas bawaan',
+    'dokumen sistem',
+    'sample',
+    'dummy',
+    'template'
+  ];
+
+  for (const term of forbiddenTerms) {
+    if (combined.includes(term)) {
+      return false;
+    }
   }
 
   return true;
@@ -520,10 +550,10 @@ export function initFirestoreSync() {
         });
 
         // Preserve local file dataUrls when remote Firestore snapshot omits them
-        const existingMap = new Map(cachedSubmissions.map((s) => [s.id, s]));
+        const existingMap = new Map(cachedSubmissions.map((s) => [s.id.toUpperCase(), s]));
         const mergedList: SubmissionRecord[] = remoteList.map((remoteSub) => {
           const repairedRemote = repairSubmissionFields(remoteSub);
-          const localSub = existingMap.get(remoteSub.id);
+          const localSub = existingMap.get(remoteSub.id.toUpperCase());
           if (!localSub) return repairedRemote;
 
           const filePool = [...(repairedRemote.files || [])].filter(isPureUploadedFile);
@@ -544,10 +574,26 @@ export function initFirestoreSync() {
           return repairSubmissionFields({ ...repairedRemote, files: filePool.filter(isPureUploadedFile) });
         });
 
-        // Sort descending by submission time
-        mergedList.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        // CRITICAL: Jangan pernah menghapus permohonan lokal yang baru dibuat sebelum Firestore snapshot selesai menulis
+        const remoteIds = new Set(remoteList.map((s) => s.id.toUpperCase()));
+        const localUnsynced = cachedSubmissions
+          .filter((s) => s && s.id && !remoteIds.has(s.id.toUpperCase()))
+          .map(repairSubmissionFields);
 
-        cachedSubmissions = mergedList;
+        // Upload permohonan lokal yang belum tersimpan di Firestore ke cloud
+        localUnsynced.forEach((unsyncedSub) => {
+          try {
+            const safeData = sanitizeForFirestore(unsyncedSub);
+            setDoc(doc(db, 'submissions', unsyncedSub.id), safeData).catch(() => {});
+          } catch (e) {}
+        });
+
+        const combinedList = [...localUnsynced, ...mergedList];
+
+        // Sort descending by submission time
+        combinedList.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+        cachedSubmissions = combinedList;
         try {
           localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(mergedList));
         } catch (e) {
@@ -992,8 +1038,8 @@ export async function importOrSyncSubmissions(
     if (existingKey) {
       // Data sudah ada: perbarui tautan berkas Google Drive & perbaiki nama/telepon jika sebelumnya korup
       const existing = currentMap.get(existingKey)!;
-      const mergedFiles = [...(existing.files || [])];
-      (item.files || []).forEach(nf => {
+      const mergedFiles = [...(existing.files || [])].filter(isPureUploadedFile);
+      (item.files || []).filter(isPureUploadedFile).forEach(nf => {
         if (!mergedFiles.some(mf => mf.fileName === nf.fileName || (nf.googleDriveViewUrl && mf.googleDriveViewUrl === nf.googleDriveViewUrl))) {
           mergedFiles.push(nf);
         }
@@ -1017,7 +1063,7 @@ export async function importOrSyncSubmissions(
         phone: finalPhone || existing.phone,
         status: existing.status || item.status, // preserve officer review status
         statusHistory: existing.statusHistory && existing.statusHistory.length > 0 ? existing.statusHistory : item.statusHistory,
-        files: mergedFiles
+        files: mergedFiles.filter(isPureUploadedFile)
       };
       currentMap.set(existingKey, merged);
       updated++;
@@ -1029,8 +1075,9 @@ export async function importOrSyncSubmissions(
         console.warn('Sync update doc error:', err);
       }
     } else {
-      // Data baru dari Google Drive/Sheet: tambahkan ke sistem
-      currentMap.set(key, item);
+      // Data baru dari Google Drive/Sheet: tambahkan ke sistem dengan validasi berkas upload murni
+      const cleanItem = repairSubmissionFields(item);
+      currentMap.set(key, cleanItem);
       added++;
 
       try {
