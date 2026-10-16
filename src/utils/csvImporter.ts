@@ -382,7 +382,7 @@ export function convertRowsToSubmissions(rows: string[][]): {
       institutionName: cleanInst !== '-' ? cleanInst : undefined,
       status,
       submittedAt,
-      files,
+      files: cleanFiles,
       formData: {
         applicantName: cleanApplicantName !== '-' ? cleanApplicantName : undefined,
         phone: rawPhone && rawPhone !== '-' ? rawPhone : undefined,

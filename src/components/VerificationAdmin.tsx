@@ -54,12 +54,14 @@ import {
   isPureUploadedFile,
   scanAndRecoverAllDriveFiles,
   extractAllDriveFilesFromSubmission,
-  repairSubmissionFields
+  repairSubmissionFields,
+  generateSubmissionId,
+  importOrSyncSubmissions
 } from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
-import { getGoogleAppsScriptUrl, sendSubmissionToGoogleSheetViaScript } from '../utils/googleAppsScript';
+import { getGoogleAppsScriptUrl, sendSubmissionToGoogleSheetViaScript, fetchSubmissionsFromGoogleSheetViaScript } from '../utils/googleAppsScript';
 import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';
@@ -86,10 +88,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [filterService, setFilterService] = useState<string>('ALL');
   const [filterDistrict, setFilterDistrict] = useState<string>('ALL');
 
-  // Fitur Riwayat vs Layanan Bulan Berjalan (Default aktif: Bulan Berjalan)
-  const [activeViewTab, setActiveViewTab] = useState<'CURRENT_MONTH' | 'HISTORY'>('CURRENT_MONTH');
+  // Fitur Tampilan Tab: Semua Layanan Masuk, Bulan Berjalan, dan Riwayat Layanan (Default: ALL agar SEMUA layanan baru 100% langsung muncul)
+  const [activeViewTab, setActiveViewTab] = useState<'ALL' | 'CURRENT_MONTH' | 'HISTORY'>('ALL');
   const [filterHistoryMonth, setFilterHistoryMonth] = useState<string>('ALL');
   const [filterHistoryYear, setFilterHistoryYear] = useState<string>('ALL');
+
+  // Status sinkronisasi otomatis Google Drive & Google Sheets
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+  const [lastAutoSyncTime, setLastAutoSyncTime] = useState<string>('');
 
   // Active modal for detailed verification
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionRecord | null>(null);
@@ -124,15 +130,92 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [isSyncImportModalOpen, setIsSyncImportModalOpen] = useState(false);
   const [isGasConfigured, setIsGasConfigured] = useState(false);
 
+  // Fungsi sinkronisasi otomatis latar belakang: Menarik berkas & permohonan baru dari Google Drive & Google Sheets
+  const autoSyncDriveAndSheetSubmissions = async () => {
+    try {
+      const gasUrl = await getGoogleAppsScriptUrl();
+      if (!gasUrl) return;
+      setIsGasConfigured(true);
+      setIsAutoSyncing(true);
+
+      const res = await fetchSubmissionsFromGoogleSheetViaScript(gasUrl);
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const formatted: SubmissionRecord[] = res.data.map((item: any) => {
+          const files: UploadedFileInfo[] = extractAllDriveFilesFromSubmission(item).filter(isPureUploadedFile);
+          const serviceObj = SERVICES_LIST.find(s => s.title.toLowerCase() === (item.serviceTitle || '').toLowerCase()) || SERVICES_LIST[0];
+
+          return repairSubmissionFields({
+            id: item.id && item.id.length >= 6 ? item.id : generateSubmissionId(),
+            verificationCode: `VRF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+            serviceId: serviceObj.id,
+            serviceTitle: item.serviceTitle || serviceObj.title,
+            applicantName: (item.applicantName && !isLooksLikeServiceName(item.applicantName, item.serviceTitle) && item.applicantName !== 'Pemohon Layanan')
+              ? item.applicantName
+              : '-',
+            phone: item.phone && item.phone !== '-' ? item.phone : '-',
+            email: item.email || undefined,
+            district: item.district || undefined,
+            address: item.address || (item.district ? `Kecamatan ${item.district}` : 'Kabupaten Gowa'),
+            institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
+            status: item.status || 'SUBMITTED',
+            submittedAt: item.submittedAt || new Date().toISOString(),
+            files,
+            formData: {
+              ...(item.formData || {}),
+              applicantName: item.applicantName,
+              phone: item.phone,
+              district: item.district,
+              address: item.address,
+              institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
+              serviceTitle: item.serviceTitle || serviceObj.title,
+              source: 'Auto-Sync Google Apps Script / Drive'
+            },
+            checklistConfirmed: [],
+            officerNotes: '',
+            statusHistory: [
+              {
+                status: (item.status || 'SUBMITTED') as ApplicationStatus,
+                timestamp: item.submittedAt || new Date().toISOString(),
+                note: 'Tersinkronisasi otomatis dari Google Drive / Google Sheets kantor',
+                officerName: 'Sistem Cloud MALA\'BIRI'
+              }
+            ]
+          });
+        });
+
+        const syncRes = await importOrSyncSubmissions(formatted);
+        if (syncRes.added > 0 || syncRes.updated > 0) {
+          onRefreshSubmissions();
+        }
+      }
+      setLastAutoSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } catch (err) {
+      console.warn('Auto sync Google Drive & Sheets notice:', err);
+    } finally {
+      setIsAutoSyncing(false);
+    }
+  };
+
   React.useEffect(() => {
     getGoogleAppsScriptUrl().then((url) => {
       setIsGasConfigured(!!url);
+      if (url) {
+        autoSyncDriveAndSheetSubmissions();
+      }
     });
+
     scanAndRecoverAllDriveFiles().then((res) => {
       if (res.totalRecovered > 0) {
         onRefreshSubmissions();
       }
     }).catch(() => {});
+
+    // Sinkronisasi otomatis setiap 15 detik agar setiap layanan baru dari Google Drive/Sheets langsung tampil!
+    const syncInterval = setInterval(() => {
+      autoSyncDriveAndSheetSubmissions();
+    }, 15000);
+
+    return () => clearInterval(syncInterval);
   }, [isGoogleDriveModalOpen, isSyncImportModalOpen]);
 
   // Edit Applicant Details Modal state
@@ -450,8 +533,21 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const currentMonthInfo = getCurrentMonthYear();
 
   // Memisahkan permohonan aktif bulan berjalan vs riwayat bulan-bulan sebelumnya
-  const currentMonthSubmissions = safeSubmissions.filter(s => isCurrentMonthSubmission(s.submittedAt));
-  const historySubmissions = safeSubmissions.filter(s => !isCurrentMonthSubmission(s.submittedAt));
+  // Catatan penting: Permohonan yang berstatus baru/aktif (SUBMITTED, VERIFYING, REVIEW, REVISION_NEEDED) SELALU disertakan agar 100% muncul di panel verifikasi!
+  const currentMonthSubmissions = safeSubmissions.filter(s => 
+    isCurrentMonthSubmission(s.submittedAt) ||
+    s.status === 'SUBMITTED' ||
+    s.status === 'VERIFYING' ||
+    s.status === 'REVIEW' ||
+    s.status === 'REVISION_NEEDED'
+  );
+  const historySubmissions = safeSubmissions.filter(s => 
+    !isCurrentMonthSubmission(s.submittedAt) &&
+    s.status !== 'SUBMITTED' &&
+    s.status !== 'VERIFYING' &&
+    s.status !== 'REVIEW' &&
+    s.status !== 'REVISION_NEEDED'
+  );
 
   // Mendapatkan daftar tahun yang ada pada riwayat layanan
   const historyAvailableYears = Array.from(new Set(
@@ -461,8 +557,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     })
   )).sort((a, b) => Number(b) - Number(a));
 
-  // Pool permohonan yang aktif ditampilkan saat ini
-  const activePool = activeViewTab === 'CURRENT_MONTH' ? currentMonthSubmissions : historySubmissions;
+  // Pool permohonan yang aktif ditampilkan saat ini (ALL menampilkan 100% permohonan yang masuk tanpa terkecuali)
+  const activePool = activeViewTab === 'ALL' 
+    ? safeSubmissions 
+    : (activeViewTab === 'CURRENT_MONTH' ? currentMonthSubmissions : historySubmissions);
 
   const filteredList = activePool.filter(sub => {
     if (!sub) return false;
@@ -537,11 +635,18 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    const prefix = activeViewTab === 'CURRENT_MONTH' ? 'bulan_berjalan' : 'riwayat';
+    const prefix = activeViewTab === 'ALL' ? 'semua_layanan' : (activeViewTab === 'CURRENT_MONTH' ? 'bulan_berjalan' : 'riwayat');
     link.setAttribute('download', `rekap_layanan_${prefix}_malabbiri_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleManualRefreshAll = async () => {
+    onRefreshSubmissions();
+    await autoSyncDriveAndSheetSubmissions();
+    await scanAndRecoverAllDriveFiles();
+    onRefreshSubmissions();
   };
 
   return (
@@ -572,6 +677,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
+          {/* Status Auto-Sync Google Drive & Sheets */}
+          {isGasConfigured && (
+            <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-xs font-semibold text-emerald-800">
+              <span className={`w-2 h-2 rounded-full ${isAutoSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-600 animate-pulse'}`} />
+              <span>{isAutoSyncing ? 'Menyinkronkan Drive...' : 'Auto-Sync Drive Aktif'}</span>
+              {lastAutoSyncTime && <span className="text-[10px] text-slate-500 font-normal">({lastAutoSyncTime})</span>}
+            </div>
+          )}
+
           <button
             onClick={() => setIsSyncImportModalOpen(true)}
             className="px-3.5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
@@ -633,12 +747,16 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             <span>Dashboard Verifikasi Petugas Bimas Islam</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
-            {activeViewTab === 'CURRENT_MONTH' ? 'Panel Layanan Bulan Berjalan' : 'Panel Riwayat Layanan'}
+            {activeViewTab === 'ALL'
+              ? 'Panel Semua Layanan Masuk'
+              : (activeViewTab === 'CURRENT_MONTH' ? 'Panel Layanan Bulan Berjalan' : 'Panel Riwayat Layanan')}
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
-            {activeViewTab === 'CURRENT_MONTH'
-              ? `Menampilkan permohonan layanan aktif pada periode bulan berjalan: ${currentMonthInfo.label}. Pemeriksaan berkas yang diupload dan validasi status permohonan.`
-              : 'Menampilkan riwayat seluruh permohonan layanan yang diajukan pada bulan-bulan sebelumnya.'}
+            {activeViewTab === 'ALL'
+              ? 'Menampilkan 100% seluruh permohonan layanan yang masuk secara lengkap dan real-time dari portal maupun Google Drive/Sheets kantor.'
+              : (activeViewTab === 'CURRENT_MONTH'
+                ? `Menampilkan permohonan layanan aktif pada periode bulan berjalan: ${currentMonthInfo.label}. Pemeriksaan berkas upload dan validasi status permohonan.`
+                : 'Menampilkan riwayat seluruh permohonan layanan yang diajukan pada bulan-bulan sebelumnya.')}
           </p>
         </div>
 
@@ -681,18 +799,37 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </button>
 
           <button
-            onClick={onRefreshSubmissions}
+            onClick={handleManualRefreshAll}
             className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            title="Segarkan data dan sinkronkan dengan Google Drive/Sheets"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isAutoSyncing ? 'animate-spin' : ''}`} />
             <span>Segarkan Data</span>
           </button>
         </div>
       </div>
 
-      {/* Tab Navigasi: Layanan Bulan Berjalan vs Riwayat Layanan */}
+      {/* Tab Navigasi: Semua Layanan Masuk vs Bulan Berjalan vs Riwayat Layanan */}
       <div className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setActiveViewTab('ALL')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              activeViewTab === 'ALL'
+                ? 'bg-emerald-800 text-white shadow-emerald-950/20'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Database className={`w-4 h-4 ${activeViewTab === 'ALL' ? 'text-emerald-300' : 'text-slate-500'}`} />
+            <span>Semua Layanan Masuk</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeViewTab === 'ALL' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {safeSubmissions.length}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveViewTab('CURRENT_MONTH')}
@@ -733,9 +870,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         <div className="text-[11px] text-slate-600 font-medium px-2 py-1 flex items-center gap-1.5">
           <Info className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
           <span>
-            {activeViewTab === 'CURRENT_MONTH'
-              ? `Layanan aktif yang tampil pada panel saat ini adalah bulan berjalan (${currentMonthInfo.label}).`
-              : 'Layanan bulan-bulan lalu telah otomatis masuk ke menu Riwayat ini.'}
+            {activeViewTab === 'ALL'
+              ? 'Menampilkan 100% seluruh permohonan layanan yang masuk tanpa batasan waktu.'
+              : (activeViewTab === 'CURRENT_MONTH'
+                ? `Menampilkan permohonan aktif periode berjalan (${currentMonthInfo.label}) dan berkas baru yang perlu diproses.`
+                : 'Layanan bulan-bulan lalu telah otomatis masuk ke menu Riwayat ini.')}
           </span>
         </div>
       </div>
@@ -744,11 +883,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
           <span className="text-xs text-slate-500 font-medium block mb-1">
-            {activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Layanan'}
+            {activeViewTab === 'ALL' ? 'Total Seluruh Layanan' : (activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Layanan')}
           </span>
           <span className="text-2xl font-bold text-slate-900">{activePool.length}</span>
           <span className="text-[10px] text-slate-500 block mt-1 font-medium">
-            {activeViewTab === 'CURRENT_MONTH' ? `Periode ${currentMonthInfo.label}` : 'Seluruh bulan-bulan lalu'}
+            {activeViewTab === 'ALL' ? '100% Data Layanan Masuk' : (activeViewTab === 'CURRENT_MONTH' ? `Periode ${currentMonthInfo.label}` : 'Seluruh bulan-bulan lalu')}
           </span>
         </div>
 

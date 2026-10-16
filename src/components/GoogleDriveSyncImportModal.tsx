@@ -21,7 +21,7 @@ import { SubmissionRecord, GOWA_DISTRICTS, UploadedFileInfo } from '../types';
 import { SERVICES_LIST } from '../data/services';
 import { parseCSV, convertRowsToSubmissions } from '../utils/csvImporter';
 import { getGoogleAppsScriptUrl, fetchSubmissionsFromGoogleSheetViaScript } from '../utils/googleAppsScript';
-import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission, isLooksLikeServiceName, extractAllDriveFilesFromSubmission } from '../utils/storage';
+import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission, isLooksLikeServiceName, extractAllDriveFilesFromSubmission, isPureUploadedFile } from '../utils/storage';
 import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
 
 interface GoogleDriveSyncImportModalProps {
@@ -86,7 +86,7 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
       if (res.success && res.data) {
         // Convert sheet data rows into SubmissionRecord
         const formatted: SubmissionRecord[] = res.data.map((item: any) => {
-          const files: UploadedFileInfo[] = extractAllDriveFilesFromSubmission(item);
+          const files: UploadedFileInfo[] = extractAllDriveFilesFromSubmission(item).filter(isPureUploadedFile);
           const serviceObj = SERVICES_LIST.find(s => s.title.toLowerCase() === (item.serviceTitle || '').toLowerCase()) || SERVICES_LIST[0];
 
           return {
@@ -245,9 +245,9 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
     const newId = generateSubmissionId();
     const now = new Date().toISOString();
 
-    const files = [];
+    const files: UploadedFileInfo[] = [];
     if (manualDriveUrl.trim()) {
-      files.push({
+      const candidate: UploadedFileInfo = {
         fieldName: 'berkas_drive',
         label: 'Berkas Permohonan Google Drive',
         fileName: 'Berkas_Pengajuan_Google_Drive.pdf',
@@ -255,7 +255,10 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
         fileType: 'application/pdf',
         uploadedAt: now,
         googleDriveViewUrl: manualDriveUrl.trim()
-      });
+      };
+      if (isPureUploadedFile(candidate)) {
+        files.push(candidate);
+      }
     }
 
     setIsSaving(true);
