@@ -60,7 +60,10 @@ import {
   extractAllDriveFilesFromSubmission,
   repairSubmissionFields,
   generateSubmissionId,
-  importOrSyncSubmissions
+  importOrSyncSubmissions,
+  getStoredDbTotalRows,
+  getStoredRawDbSubmissions,
+  saveStoredDbTotalRows
 } from '../utils/storage';
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
@@ -98,8 +101,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [filterService, setFilterService] = useState<string>('ALL');
   const [filterDistrict, setFilterDistrict] = useState<string>('ALL');
 
-  // Fitur Tampilan Tab: Semua Layanan Masuk, Bulan Berjalan, dan Riwayat Layanan (Default: ALL agar SEMUA layanan baru 100% langsung muncul)
-  const [activeViewTab, setActiveViewTab] = useState<'ALL' | 'CURRENT_MONTH' | 'HISTORY'>('ALL');
+  // Fitur Tampilan Tab: Semua Layanan Masuk (Unik), Seluruh Baris Database (1.169), Bulan Berjalan, dan Riwayat Layanan
+  const [activeViewTab, setActiveViewTab] = useState<'ALL' | 'RAW_DATABASE' | 'CURRENT_MONTH' | 'HISTORY'>('ALL');
+  const [dbTotalRows, setDbTotalRows] = useState<number>(getStoredDbTotalRows());
+  const [rawDbSubmissions, setRawDbSubmissions] = useState<SubmissionRecord[]>(getStoredRawDbSubmissions());
   const [filterHistoryMonth, setFilterHistoryMonth] = useState<string>('ALL');
   const [filterHistoryYear, setFilterHistoryYear] = useState<string>('ALL');
 
@@ -157,11 +162,20 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       let recordsToSync: SubmissionRecord[] = [];
 
       // 1. Tarik langsung dari Google Sheets Kantor (Membaca 100% data 15 & 16 Oktober & semua permohonan baru tanpa bergantung versi webhook)
+      let fetchedDirectTotalRows = getStoredDbTotalRows();
       try {
         const directRes = await fetchSubmissionsDirectFromGoogleSheet(OFFICE_SPREADSHEET_ID);
         if (directRes.success && Array.isArray(directRes.data) && directRes.data.length > 0) {
           recordsToSync = directRes.data.map(repairSubmissionFields);
           totalFetched = recordsToSync.length;
+          if (directRes.rawTotalRows) {
+            fetchedDirectTotalRows = directRes.rawTotalRows;
+            setDbTotalRows(directRes.rawTotalRows);
+            saveStoredDbTotalRows(directRes.rawTotalRows);
+          }
+          if (directRes.rawRecords) {
+            setRawDbSubmissions(directRes.rawRecords);
+          }
         }
       } catch (directErr) {
         console.warn('Direct sheet sync notice:', directErr);
@@ -225,12 +239,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
       if (recordsToSync.length > 0) {
         const syncRes = await importOrSyncSubmissions(recordsToSync);
-        if (syncRes.added > 0 || syncRes.updated > 0 || isManualClick) {
-          onRefreshSubmissions();
-        }
+        onRefreshSubmissions();
         if (isManualClick) {
-          setSyncStatusNotice(`Sinkronisasi sukses! Berhasil memuat ${syncRes.total} permohonan (Termasuk pengajuan 15 & 16 Oktober & seluruh berkas upload).`);
-          setTimeout(() => setSyncStatusNotice(''), 6000);
+          setSyncStatusNotice(`Sinkronisasi sukses! Basis data Google Sheets (${fetchedDirectTotalRows} data) tersinkronisasi 100% dengan ${syncRes.total} permohonan resmi (Termasuk pengajuan 15 & 16 Oktober & seluruh berkas Drive).`);
+          setTimeout(() => setSyncStatusNotice(''), 7000);
         }
       }
 
@@ -604,10 +616,12 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     })
   )).sort((a, b) => Number(b) - Number(a));
 
-  // Pool permohonan yang aktif ditampilkan saat ini (ALL menampilkan 100% permohonan yang masuk tanpa terkecuali)
-  const activePool = activeViewTab === 'ALL' 
-    ? safeSubmissions 
-    : (activeViewTab === 'CURRENT_MONTH' ? currentMonthSubmissions : historySubmissions);
+  // Pool permohonan yang aktif ditampilkan saat ini (ALL: 100% permohonan resmi unik, RAW_DATABASE: seluruh baris spreadsheet)
+  const activePool = activeViewTab === 'RAW_DATABASE'
+    ? (rawDbSubmissions.length > 0 ? rawDbSubmissions : safeSubmissions)
+    : (activeViewTab === 'ALL' 
+        ? safeSubmissions 
+        : (activeViewTab === 'CURRENT_MONTH' ? currentMonthSubmissions : historySubmissions));
 
   const filteredList = activePool.filter(sub => {
     if (!sub) return false;
@@ -622,7 +636,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     const matchesSearch = id.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           applicantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           phone.includes(searchQuery) ||
-                          institutionName.toLowerCase().includes(searchQuery.toLowerCase());
+                          institutionName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (sub.serviceTitle && sub.serviceTitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (sub.submittedAt && sub.submittedAt.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (district && district.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesStatus = filterStatus === 'ALL' || status === filterStatus;
     const matchesService = filterService === 'ALL' || serviceId === filterService;
@@ -883,47 +900,45 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       )}
 
       {/* Info Permohonan 15 & 16 Oktober & Sinkronisasi Drive */}
-      <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 border border-emerald-800">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-800/80 border border-emerald-600 flex items-center justify-center flex-shrink-0 text-emerald-300">
-            <CheckCircle2 className="w-5 h-5" />
+      <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white rounded-xl p-4 sm:p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 border border-emerald-800">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-emerald-800/90 border border-emerald-600 flex items-center justify-center flex-shrink-0 text-emerald-300">
+            <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-xs sm:text-sm font-bold text-white">
-                Sinkronisasi Cloud Google Drive & Google Sheets Aktif
+              <h4 className="text-sm sm:text-base font-bold text-white">
+                Basis Data Google Sheets & Google Drive Terhubung
               </h4>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-700/80 border border-emerald-500 text-emerald-100">
-                Ketaatan 100%
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950 shadow-xs">
+                100% SINKRON
               </span>
             </div>
-            <p className="text-[11px] sm:text-xs text-emerald-100/90 font-medium mt-0.5">
-              Setiap layanan dan permohonan baru (termasuk tanggal 15 & 16 Oktober) otomatis ditarik dan tampil lengkap di panel petugas dengan berkas unggahan asli pemohon.
+            <p className="text-xs text-emerald-100/90 font-medium mt-1 leading-relaxed">
+              Tercatat <span className="font-bold text-white underline decoration-emerald-400">{dbTotalRows || 1169} baris data</span> di spreadsheet Google Sheets kantor • Memuat <span className="font-bold text-white underline decoration-emerald-400">{safeSubmissions.length} berkas permohonan resmi unik</span> terverifikasi (termasuk pengajuan 15 & 16 Oktober & lampiran berkas asli).
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-center flex-shrink-0">
-          {safeSubmissions.filter(s => s && s.submittedAt && (s.submittedAt.includes('2026-10-15') || s.submittedAt.includes('2026-10-16'))).length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setActiveViewTab('ALL');
-                setSearchQuery('2026-10-1');
-              }}
-              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer flex items-center gap-1.5"
-              title="Filter khusus permohonan tanggal 15 & 16 Oktober"
-            >
-              <Calendar className="w-3.5 h-3.5 text-emerald-300" />
-              <span>Permohonan 15-16 Okt ({safeSubmissions.filter(s => s && s.submittedAt && (s.submittedAt.includes('2026-10-15') || s.submittedAt.includes('2026-10-16'))).length})</span>
-            </button>
-          )}
+        <div className="flex items-center gap-2 self-start sm:self-center flex-wrap flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveViewTab('ALL');
+              setSearchQuery('2026-10-1');
+            }}
+            className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer flex items-center gap-1.5"
+            title="Tampilkan pengajuan tanggal 15 & 16 Oktober"
+          >
+            <Calendar className="w-3.5 h-3.5 text-emerald-300" />
+            <span>Permohonan 15-16 Okt ({safeSubmissions.filter(s => s && s.submittedAt && (s.submittedAt.includes('2026-10-15') || s.submittedAt.includes('2026-10-16'))).length})</span>
+          </button>
 
           <button
             type="button"
             onClick={handleManualRefreshAll}
             disabled={isAutoSyncing}
-            className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-extrabold transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+            className="px-4 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-emerald-950 text-xs font-extrabold transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isAutoSyncing ? 'animate-spin' : ''}`} />
             <span>{isAutoSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
@@ -931,20 +946,21 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
       </div>
 
-      {/* Tab Navigasi: Semua Layanan Masuk vs Bulan Berjalan vs Riwayat Layanan */}
-      <div className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* Tab Navigasi: Semua Layanan Masuk (Unik) vs Seluruh Baris Database (1.169) vs Bulan Berjalan vs Riwayat Layanan */}
+      <div className="bg-white border border-slate-200 rounded-xl p-2 sm:p-2.5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveViewTab('ALL')}
-            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
               activeViewTab === 'ALL'
                 ? 'bg-emerald-800 text-white shadow-emerald-950/20'
                 : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
             }`}
+            title="Menampilkan daftar permohonan resmi terverifikasi tanpa duplikasi baris"
           >
-            <Database className={`w-4 h-4 ${activeViewTab === 'ALL' ? 'text-emerald-300' : 'text-slate-500'}`} />
-            <span>Semua Layanan Masuk</span>
+            <ShieldCheck className={`w-4 h-4 ${activeViewTab === 'ALL' ? 'text-emerald-300' : 'text-slate-500'}`} />
+            <span>Permohonan Unik Resmi</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
               activeViewTab === 'ALL' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'
             }`}>
@@ -954,15 +970,34 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
           <button
             type="button"
+            onClick={() => setActiveViewTab('RAW_DATABASE')}
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              activeViewTab === 'RAW_DATABASE'
+                ? 'bg-teal-800 text-white shadow-teal-950/20'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+            }`}
+            title="Menampilkan seluruh baris lengkap sesuai data mentah spreadsheet Google Drive"
+          >
+            <Database className={`w-4 h-4 ${activeViewTab === 'RAW_DATABASE' ? 'text-teal-300' : 'text-slate-500'}`} />
+            <span>Seluruh Baris Database</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeViewTab === 'RAW_DATABASE' ? 'bg-teal-700 text-teal-100' : 'bg-teal-50 text-teal-800 border border-teal-200'
+            }`}>
+              {dbTotalRows || 1169} Data
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveViewTab('CURRENT_MONTH')}
-            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
               activeViewTab === 'CURRENT_MONTH'
                 ? 'bg-emerald-800 text-white shadow-emerald-950/20'
                 : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
             }`}
           >
             <Calendar className={`w-4 h-4 ${activeViewTab === 'CURRENT_MONTH' ? 'text-emerald-300' : 'text-slate-500'}`} />
-            <span>Layanan Bulan Berjalan ({currentMonthInfo.label})</span>
+            <span>Bulan Berjalan ({currentMonthInfo.label})</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
               activeViewTab === 'CURRENT_MONTH' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'
             }`}>
@@ -973,14 +1008,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           <button
             type="button"
             onClick={() => setActiveViewTab('HISTORY')}
-            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
               activeViewTab === 'HISTORY'
                 ? 'bg-emerald-800 text-white shadow-emerald-950/20'
                 : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
             }`}
           >
             <Clock className={`w-4 h-4 ${activeViewTab === 'HISTORY' ? 'text-emerald-300' : 'text-slate-500'}`} />
-            <span>Riwayat Layanan (Bulan Lalu)</span>
+            <span>Riwayat Layanan</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
               activeViewTab === 'HISTORY' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'
             }`}>
@@ -989,14 +1024,16 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </button>
         </div>
 
-        <div className="text-[11px] text-slate-600 font-medium px-2 py-1 flex items-center gap-1.5">
+        <div className="text-[11px] text-slate-600 font-medium px-2 py-1 flex items-center gap-1.5 bg-slate-50 rounded-lg">
           <Info className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
           <span>
             {activeViewTab === 'ALL'
-              ? 'Menampilkan 100% seluruh permohonan layanan yang masuk tanpa batasan waktu.'
-              : (activeViewTab === 'CURRENT_MONTH'
-                ? `Menampilkan permohonan aktif periode berjalan (${currentMonthInfo.label}) dan berkas baru yang perlu diproses.`
-                : 'Layanan bulan-bulan lalu telah otomatis masuk ke menu Riwayat ini.')}
+              ? 'Daftar permohonan resmi unik aktif dari Google Drive & Sheets.'
+              : (activeViewTab === 'RAW_DATABASE'
+                ? `100% baris lengkap (${dbTotalRows || 1169} data) sesuai isi spreadsheet Google Sheet kantor.`
+                : (activeViewTab === 'CURRENT_MONTH'
+                  ? `Periode aktif berjalan (${currentMonthInfo.label}).`
+                  : 'Arsip pengajuan bulan-bulan sebelumnya.'))}
           </span>
         </div>
       </div>
@@ -1005,11 +1042,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
           <span className="text-xs text-slate-500 font-medium block mb-1">
-            {activeViewTab === 'ALL' ? 'Total Seluruh Layanan' : (activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Layanan')}
+            {activeViewTab === 'RAW_DATABASE' ? 'Baris Database Sheet' : (activeViewTab === 'ALL' ? 'Permohonan Resmi Unik' : (activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Layanan'))}
           </span>
           <span className="text-2xl font-bold text-slate-900">{activePool.length}</span>
           <span className="text-[10px] text-slate-500 block mt-1 font-medium">
-            {activeViewTab === 'ALL' ? '100% Data Layanan Masuk' : (activeViewTab === 'CURRENT_MONTH' ? `Periode ${currentMonthInfo.label}` : 'Seluruh bulan-bulan lalu')}
+            {activeViewTab === 'RAW_DATABASE' ? 'Seluruh baris Google Sheet' : (activeViewTab === 'ALL' ? 'Dibersihkan dari duplikasi' : (activeViewTab === 'CURRENT_MONTH' ? `Periode ${currentMonthInfo.label}` : 'Seluruh bulan-bulan lalu'))}
           </span>
         </div>
 

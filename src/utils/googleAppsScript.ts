@@ -2,6 +2,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { SubmissionRecord } from '../types';
 import { parseCSV, convertRowsToSubmissions } from './csvImporter';
+import { saveStoredDbTotalRows, saveRawDbSubmissions, repairSubmissionFields } from './storage';
 
 const APPS_SCRIPT_STORAGE_KEY = 'malabbiri_gas_webhook_url_v1';
 const SETTING_DOC_ID = 'google_drive_integration';
@@ -694,6 +695,8 @@ export async function fetchSubmissionsDirectFromGoogleSheet(spreadsheetId: strin
   message: string;
   data?: SubmissionRecord[];
   count?: number;
+  rawTotalRows?: number;
+  rawRecords?: SubmissionRecord[];
 }> {
   try {
     const cleanId = (spreadsheetId.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || spreadsheetId).trim();
@@ -738,12 +741,17 @@ export async function fetchSubmissionsDirectFromGoogleSheet(spreadsheetId: strin
       try {
         const jsonpRows = await fetchGoogleSheetViaJsonp(cleanId);
         if (jsonpRows && jsonpRows.length >= 2) {
+          const rawTotal = Math.max(0, jsonpRows.length - 1);
           const { records } = convertRowsToSubmissions(jsonpRows);
+          saveStoredDbTotalRows(rawTotal);
+          saveRawDbSubmissions(records);
           return {
             success: true,
-            message: `Berhasil menarik ${records.length} data permohonan dari Google Sheets via Cloud Direct!`,
+            message: `Berhasil menarik ${rawTotal} baris data dari Google Sheets via Cloud Direct!`,
             data: records,
-            count: records.length
+            count: records.length,
+            rawTotalRows: rawTotal,
+            rawRecords: records
           };
         }
       } catch (jsonpErr) {
@@ -754,13 +762,18 @@ export async function fetchSubmissionsDirectFromGoogleSheet(spreadsheetId: strin
     }
 
     const rows = parseCSV(csvText);
+    const rawTotal = Math.max(0, rows.length - 1);
     const { records } = convertRowsToSubmissions(rows);
+    saveStoredDbTotalRows(rawTotal);
+    saveRawDbSubmissions(records);
 
     return {
       success: true,
-      message: `Berhasil menarik ${records.length} data permohonan dari Google Sheets!`,
+      message: `Berhasil menyinkronkan ${rawTotal} baris data dari Google Sheets kantor!`,
       data: records,
-      count: records.length
+      count: records.length,
+      rawTotalRows: rawTotal,
+      rawRecords: records
     };
   } catch (err: any) {
     return {

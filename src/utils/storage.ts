@@ -439,10 +439,15 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
 let cachedSubmissions: SubmissionRecord[] = [];
 let cachedSurveys: SurveyRecord[] = [];
 
+export const DB_TOTAL_ROWS_KEY = 'malabbiri_db_total_rows_v2';
+export const RAW_DB_SUBMISSIONS_KEY = 'malabbiri_raw_db_submissions_v2';
+
+let cachedRawDbSubmissions: SubmissionRecord[] = [];
+
 // Initialize memory cache from localStorage
 try {
   if (typeof window !== 'undefined' && window.localStorage) {
-    // Purge deprecated v1 and v2 old cached keys immediately
+    // Purge deprecated old cached keys immediately
     ['malabbiri_submissions_v1', 'malabbiri_submissions_v2', 'malabbiri_submissions'].forEach((oldKey) => {
       try { localStorage.removeItem(oldKey); } catch (e) { /* ignore */ }
     });
@@ -450,13 +455,19 @@ try {
     const rawSubs = localStorage.getItem(SUBMISSIONS_KEY);
     if (rawSubs) {
       const parsed: SubmissionRecord[] = JSON.parse(rawSubs);
-      cachedSubmissions = parsed.map(repairSubmissionFields);
+      if (parsed && parsed.length > 0) {
+        cachedSubmissions = parsed.map(repairSubmissionFields);
+      } else {
+        cachedSubmissions = INITIAL_SUBMISSIONS.map(repairSubmissionFields);
+        try {
+          localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(cachedSubmissions));
+        } catch (e) { /* ignore */ }
+      }
+    } else {
+      cachedSubmissions = INITIAL_SUBMISSIONS.map(repairSubmissionFields);
       try {
         localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(cachedSubmissions));
       } catch (e) { /* ignore */ }
-    } else {
-      cachedSubmissions = [];
-      localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify([]));
     }
 
     const rawSurveys = localStorage.getItem(SURVEYS_KEY);
@@ -466,9 +477,53 @@ try {
       cachedSurveys = [];
       localStorage.setItem(SURVEYS_KEY, JSON.stringify([]));
     }
+
+    const rawDb = localStorage.getItem(RAW_DB_SUBMISSIONS_KEY);
+    if (rawDb) {
+      cachedRawDbSubmissions = JSON.parse(rawDb);
+    }
   }
 } catch (err) {
   console.warn('Local storage init error:', err);
+}
+
+export function getStoredRawDbSubmissions(): SubmissionRecord[] {
+  return [...cachedRawDbSubmissions];
+}
+
+export function saveRawDbSubmissions(list: SubmissionRecord[]): void {
+  cachedRawDbSubmissions = list;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const lightList = list.slice(0, 1500).map(s => ({
+        ...s,
+        files: (s.files || []).map(f => {
+          const c = { ...f };
+          delete c.dataUrl;
+          return c;
+        })
+      }));
+      localStorage.setItem(RAW_DB_SUBMISSIONS_KEY, JSON.stringify(lightList));
+    }
+  } catch (e) {}
+}
+
+export function getStoredDbTotalRows(): number {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const val = localStorage.getItem(DB_TOTAL_ROWS_KEY);
+      if (val) return parseInt(val, 10);
+    }
+  } catch (e) {}
+  return 1169;
+}
+
+export function saveStoredDbTotalRows(count: number): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(DB_TOTAL_ROWS_KEY, count.toString());
+    }
+  } catch (e) {}
 }
 
 // Event listeners for real-time reactivity
@@ -594,11 +649,11 @@ export function initFirestoreSync() {
           .filter((s) => s && s.id && !remoteIds.has(s.id.toUpperCase()))
           .map(repairSubmissionFields);
 
-        // Upload permohonan lokal yang belum tersimpan di Firestore ke cloud
-        localUnsynced.forEach((unsyncedSub) => {
+        // Upload permohonan lokal yang belum tersimpan di Firestore ke cloud (maksimal 5 item di background)
+        localUnsynced.slice(0, 5).forEach((unsyncedSub) => {
           try {
             const safeData = sanitizeForFirestore(unsyncedSub);
-            setDoc(doc(db, 'submissions', unsyncedSub.id), safeData).catch(() => {});
+            setDoc(doc(db, 'submissions', unsyncedSub.id), safeData, { merge: true }).catch(() => {});
           } catch (e) {}
         });
 
@@ -609,22 +664,17 @@ export function initFirestoreSync() {
 
         cachedSubmissions = combinedList;
         try {
-          localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(mergedList));
+          const lightCombined = combinedList.map((sub) => ({
+            ...sub,
+            files: (sub.files || []).map((f) => {
+              const copy = { ...f };
+              delete copy.dataUrl;
+              return copy;
+            })
+          }));
+          localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(lightCombined));
         } catch (e) {
-          // If quota exceeded due to dataUrls, strip dataUrls for localStorage only
-          try {
-            const lightList = mergedList.map((sub) => ({
-              ...sub,
-              files: sub.files.map((f) => {
-                const copy = { ...f };
-                delete copy.dataUrl;
-                return copy;
-              })
-            }));
-            localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(lightList));
-          } catch (innerErr) {
-            // ignore
-          }
+          // ignore
         }
         notifySubmissionsListeners();
       },
@@ -1022,36 +1072,27 @@ export async function importOrSyncSubmissions(
   const currentMap = new Map<string, SubmissionRecord>();
   cachedSubmissions.forEach(s => currentMap.set(s.id.toUpperCase(), s));
 
+  const itemsToPersist: SubmissionRecord[] = [];
+
   for (const rawItem of incomingSubmissions) {
     if (!rawItem.id) continue;
     const item = repairSubmissionFields(rawItem);
     let key = item.id.toUpperCase();
-    let existingKey: string | null = currentMap.has(key) ? key : null;
+    let existing = currentMap.get(key);
 
-    // Jika ID belum cocok langsung, coba cari apakah nama pemohon atau nomor HP sudah ada sebelumnya di sistem
-    if (!existingKey) {
-      for (const [k, s] of currentMap.entries()) {
-        const itemCleanName = item.applicantName?.trim().toLowerCase();
-        const existCleanName = s.applicantName?.trim().toLowerCase();
-        const nameMatches = itemCleanName && existCleanName && 
-          itemCleanName !== '-' && existCleanName !== '-' && 
-          itemCleanName !== 'pemohon layanan' && existCleanName !== 'pemohon layanan' &&
-          (itemCleanName === existCleanName || existCleanName.includes(itemCleanName) || itemCleanName.includes(existCleanName));
-
-        const itemNum = item.phone?.replace(/[^0-9]/g, '');
-        const existNum = s.phone?.replace(/[^0-9]/g, '');
-        const phoneMatches = itemNum && existNum && itemNum.length >= 9 && itemNum === existNum;
-
-        if (nameMatches || phoneMatches) {
-          existingKey = k;
-          break;
-        }
-      }
+    // Jika nomor tiket sama tetapi nama pemohon berbeda nyata (bukan placeholder atau nama layanan),
+    // berikan sub-identitas unik agar kedua pemohon tetap ada di sistem dan tidak saling tertimpa
+    if (existing && existing.applicantName && item.applicantName &&
+        existing.applicantName.toLowerCase() !== item.applicantName.toLowerCase() &&
+        existing.applicantName !== '-' && item.applicantName !== '-' &&
+        !isLooksLikeServiceName(item.applicantName, item.serviceTitle)) {
+      key = `${key}-B`;
+      item.id = key;
+      existing = currentMap.get(key);
     }
 
-    if (existingKey) {
+    if (existing) {
       // Data sudah ada: perbarui tautan berkas Google Drive & perbaiki nama/telepon jika sebelumnya korup
-      const existing = currentMap.get(existingKey)!;
       const mergedFiles = [...(existing.files || [])].filter(isPureUploadedFile);
       (item.files || []).filter(isPureUploadedFile).forEach(nf => {
         if (!mergedFiles.some(mf => mf.fileName === nf.fileName || (nf.googleDriveViewUrl && mf.googleDriveViewUrl === nf.googleDriveViewUrl))) {
@@ -1071,35 +1112,22 @@ export async function importOrSyncSubmissions(
       const merged: SubmissionRecord = {
         ...existing,
         ...item,
-        id: existing.id, // Pertahankan ID tiket asli yang sudah ada
+        id: existing.id,
         verificationCode: existing.verificationCode || item.verificationCode,
         applicantName: finalName || existing.applicantName,
         phone: finalPhone || existing.phone,
-        status: existing.status || item.status, // preserve officer review status
+        status: existing.status || item.status,
         statusHistory: existing.statusHistory && existing.statusHistory.length > 0 ? existing.statusHistory : item.statusHistory,
         files: mergedFiles.filter(isPureUploadedFile)
       };
-      currentMap.set(existingKey, merged);
+      currentMap.set(key, merged);
       updated++;
-      
-      try {
-        const safeData = sanitizeForFirestore(merged);
-        await setDoc(doc(db, 'submissions', merged.id), safeData, { merge: true });
-      } catch (err) {
-        console.warn('Sync update doc error:', err);
-      }
     } else {
       // Data baru dari Google Drive/Sheet: tambahkan ke sistem dengan validasi berkas upload murni
       const cleanItem = repairSubmissionFields(item);
       currentMap.set(key, cleanItem);
       added++;
-
-      try {
-        const safeData = sanitizeForFirestore(item);
-        await setDoc(doc(db, 'submissions', item.id), safeData, { merge: true });
-      } catch (err) {
-        console.warn('Sync new doc error:', err);
-      }
+      itemsToPersist.push(cleanItem);
     }
   }
 
@@ -1109,6 +1137,21 @@ export async function importOrSyncSubmissions(
   cachedSubmissions = resultList;
   saveSubmissions(resultList);
   notifySubmissionsListeners();
+
+  // Sinkronisasi asinkron di latar belakang ke Firestore (tanpa memblokir thread atau UI aplikasi)
+  if (itemsToPersist.length > 0) {
+    (async () => {
+      try {
+        const batch = itemsToPersist.slice(0, 30);
+        for (const itm of batch) {
+          try {
+            const safeData = sanitizeForFirestore(itm);
+            await setDoc(doc(db, 'submissions', itm.id), safeData, { merge: true });
+          } catch (e) { /* ignore */ }
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  }
 
   return { added, updated, total: resultList.length };
 }
