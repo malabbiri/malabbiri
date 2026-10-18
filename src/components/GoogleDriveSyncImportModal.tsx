@@ -20,8 +20,13 @@ import {
 import { SubmissionRecord, GOWA_DISTRICTS, UploadedFileInfo } from '../types';
 import { SERVICES_LIST } from '../data/services';
 import { parseCSV, convertRowsToSubmissions } from '../utils/csvImporter';
-import { getGoogleAppsScriptUrl, fetchSubmissionsFromGoogleSheetViaScript } from '../utils/googleAppsScript';
-import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission, isLooksLikeServiceName, extractAllDriveFilesFromSubmission, isPureUploadedFile } from '../utils/storage';
+import { 
+  getGoogleAppsScriptUrl, 
+  fetchSubmissionsFromGoogleSheetViaScript,
+  fetchSubmissionsDirectFromGoogleSheet,
+  OFFICE_SPREADSHEET_ID
+} from '../utils/googleAppsScript';
+import { importOrSyncSubmissions, generateSubmissionId, createNewSubmission, isLooksLikeServiceName, extractAllDriveFilesFromSubmission, isPureUploadedFile, repairSubmissionFields } from '../utils/storage';
 import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
 
 interface GoogleDriveSyncImportModalProps {
@@ -64,19 +69,36 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
   // General processing
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!isOpen) return null;
-
-  // Handler Tab 1: Fetch via Apps Script
+  // Handler Tab 1: Fetch via Direct Google Sheet / Apps Script
   const handleFetchFromAppsScript = async () => {
     setIsSyncingWebhook(true);
     setWebhookResult(null);
 
+    try {
+      // 1. Prioritaskan penarikan langsung dari Google Sheets kantor (100% andal, mencakup pengajuan 15 & 16 Oktober)
+      const directRes = await fetchSubmissionsDirectFromGoogleSheet(OFFICE_SPREADSHEET_ID);
+      if (directRes.success && Array.isArray(directRes.data) && directRes.data.length > 0) {
+        const cleanedRecords = directRes.data.map(repairSubmissionFields);
+        setWebhookResult({
+          success: true,
+          message: `Berhasil menemukan ${cleanedRecords.length} data permohonan dari Google Sheets & Google Drive kantor (Termasuk pengajuan 15 & 16 Oktober)!`,
+          submissions: cleanedRecords,
+          spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${OFFICE_SPREADSHEET_ID}`
+        });
+        setIsSyncingWebhook(false);
+        return;
+      }
+    } catch (directErr) {
+      console.warn('Direct sheet pull notice:', directErr);
+    }
+
+    // 2. Fallback via Webhook Apps Script jika ada
     const scriptUrl = await getGoogleAppsScriptUrl();
     if (!scriptUrl) {
       setIsSyncingWebhook(false);
       setWebhookResult({
         success: false,
-        message: 'URL Webhook Google Apps Script belum dikonfigurasi. Anda juga dapat menggunakan opsi Tab "Unggah CSV Google Form" di samping jika belum memasang webhook.'
+        message: 'Gagal menghubungi Google Sheets langsung dan Webhook belum terpasang. Silakan periksa koneksi internet.'
       });
       return;
     }
@@ -89,7 +111,7 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
           const files: UploadedFileInfo[] = extractAllDriveFilesFromSubmission(item).filter(isPureUploadedFile);
           const serviceObj = SERVICES_LIST.find(s => s.title.toLowerCase() === (item.serviceTitle || '').toLowerCase()) || SERVICES_LIST[0];
 
-          return {
+          return repairSubmissionFields({
             id: item.id && item.id.length >= 6 ? item.id : generateSubmissionId(),
             verificationCode: `VRF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
             serviceId: serviceObj.id,
@@ -125,7 +147,7 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
                 officerName: 'Sinkronisasi Otomatis Google Drive'
               }
             ]
-          };
+          });
         });
 
         setWebhookResult({
@@ -137,7 +159,7 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
       } else {
         setWebhookResult({
           success: false,
-          message: res.message || 'Gagal mengambil data dari Google Sheets. Anda dapat menggunakan Tab "Unggah CSV Google Form" sebagai solusi instan.'
+          message: res.message || 'Gagal mengambil data dari Google Sheets. Anda dapat menggunakan Tab "Unggah CSV Google Form" sebagai alternatif instan.'
         });
       }
     } catch (err: any) {
@@ -149,6 +171,14 @@ export const GoogleDriveSyncImportModal: React.FC<GoogleDriveSyncImportModalProp
       setIsSyncingWebhook(false);
     }
   };
+
+  React.useEffect(() => {
+    if (isOpen && activeTab === 'webhook' && !webhookResult) {
+      handleFetchFromAppsScript();
+    }
+  }, [isOpen, activeTab]);
+
+  if (!isOpen) return null;
 
   const handleCommitWebhookSubmissions = async () => {
     if (!webhookResult?.submissions || webhookResult.submissions.length === 0) return;

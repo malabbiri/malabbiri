@@ -40,7 +40,7 @@ import {
 } from '../utils/whatsapp';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { downloadFile, downloadOfficialReceiptPdf, readFileAsDataURL } from '../utils/fileHelper';
-import { resubmitSubmissionRevision } from '../utils/storage';
+import { resubmitSubmissionRevision, isPureUploadedFile } from '../utils/storage';
 import { getGoogleAppsScriptUrl, uploadFileToGoogleDriveViaScript } from '../utils/googleAppsScript';
 import { saveFileInChunks } from '../utils/chunkedStorage';
 import { APP_INFO } from '../data/services';
@@ -796,16 +796,19 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
               </div>
 
               {/* Existing Files Replacement Form */}
+              {(() => {
+                const pureFiles = (activeSubmission.files || []).filter(isPureUploadedFile);
+                return (
               <div className="space-y-3">
                 <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center justify-between">
                   <span>1. Pilih Dokumen yang Ingin Diganti / Diperbaiki:</span>
                   <span className="text-[11px] font-normal text-slate-500 lowercase">
-                    (tersedia {activeSubmission.files.length} dokumen terlampir)
+                    (tersedia {pureFiles.length} berkas upload terlampir)
                   </span>
                 </h5>
 
                 <div className="space-y-2.5">
-                  {activeSubmission.files.map((file, fIdx) => {
+                  {pureFiles.map((file, fIdx) => {
                     const replacement = replacementFiles[fIdx];
 
                     return (
@@ -870,6 +873,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   })}
                 </div>
               </div>
+              );
+              })()}
 
               {/* Dokumen Tambahan Tambahan (Jika verifikator meminta dokumen di luar checklist semula) */}
               <div className="space-y-3 pt-1">
@@ -1042,18 +1047,21 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
               </div>
 
               {/* Uploaded Documents List */}
+              {(() => {
+                const pureFiles = (activeSubmission.files || []).filter(isPureUploadedFile);
+                return (
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                     <FileText className="w-4 h-4 text-emerald-700" />
-                    <span>Dokumen Persyaratan Terlampir ({activeSubmission.files.length})</span>
+                    <span>Dokumen Persyaratan Terlampir ({pureFiles.length})</span>
                   </h4>
                   <span className="text-[10px] text-slate-500 font-mono">Tersimpan di Cloud MALA'BIRI</span>
                 </div>
 
-                {activeSubmission.files.length > 0 ? (
+                {pureFiles.length > 0 ? (
                   <div className="space-y-2">
-                    {activeSubmission.files.map((file, fIdx) => (
+                    {pureFiles.map((file, fIdx) => (
                       <div
                         key={fIdx}
                         className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-white border border-slate-200 text-xs gap-2"
@@ -1098,6 +1106,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({
                   <p className="text-xs text-slate-500">Tidak ada berkas fisik yang terlampir.</p>
                 )}
               </div>
+              );
+              })()}
             </div>
 
             {/* Verification Security Badge & Stamp */}

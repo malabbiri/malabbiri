@@ -116,21 +116,27 @@ export function matchService(rawTitle: string): { id: number; title: string } {
 export function normalizeDate(raw: string): string {
   if (!raw) return new Date().toISOString();
   
-  // Try standard parse
-  const parsed = Date.parse(raw);
-  if (!isNaN(parsed)) {
-    return new Date(parsed).toISOString();
-  }
+  const cleanRaw = raw.trim();
 
-  // Handle dd/mm/yyyy or dd-mm-yyyy
-  const dmyMatch = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+  // Handle dd/mm/yyyy or dd-mm-yyyy with optional time "16/10/2026, 10.13.00" or "16/10/2026 10:13:00"
+  const dmyMatch = cleanRaw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[,\s]+(\d{1,2})[:.](\d{1,2})(?:[:.](\d{1,2}))?)?/);
   if (dmyMatch) {
     const day = parseInt(dmyMatch[1], 10);
     const month = parseInt(dmyMatch[2], 10) - 1;
     const year = parseInt(dmyMatch[3], 10);
     const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 10;
     const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
-    return new Date(year, month, day, hour, minute).toISOString();
+    const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hour, minute, second);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+
+  // Try standard parse
+  const parsed = Date.parse(cleanRaw);
+  if (!isNaN(parsed)) {
+    return new Date(parsed).toISOString();
   }
 
   return new Date().toISOString();
@@ -287,10 +293,20 @@ export function convertRowsToSubmissions(rows: string[][]): {
             else if (url.includes('open?id=')) dlUrl = `https://drive.google.com/uc?export=download&id=${url.match(/id=([a-zA-Z0-9_-]+)/)?.[1]}`;
             else if (url.includes('/file/d/')) dlUrl = `https://drive.google.com/uc?export=download&id=${url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1]}`;
           }
+
+          // Deteksi nama file asli jika formatnya "Nama_Berkas.pdf: https://..."
+          let detectedFileName: string | undefined = undefined;
+          const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const filePattern = new RegExp(`([^,\\n:]+\\.[a-zA-Z0-9]{2,5})\\s*:\\s*${escapedUrl}`, 'i');
+          const fileMatch = rawFilesString.match(filePattern);
+          if (fileMatch && fileMatch[1]) {
+            detectedFileName = fileMatch[1].trim();
+          }
+
           const candidateFile: UploadedFileInfo = {
             fieldName: `berkas_${uIdx + 1}`,
-            label: `Berkas Unggahan Pemohon ${uIdx + 1}`,
-            fileName: isDrive ? `Berkas_Upload_${uIdx + 1}.pdf` : `Berkas_${uIdx + 1}.pdf`,
+            label: detectedFileName || `Berkas Unggahan Pemohon ${uIdx + 1}`,
+            fileName: detectedFileName || (isDrive ? `Berkas_Upload_${uIdx + 1}.pdf` : `Berkas_${uIdx + 1}.pdf`),
             fileSize: 1024 * 1024,
             fileType: 'application/pdf',
             uploadedAt: submittedAt,

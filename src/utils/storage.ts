@@ -211,23 +211,29 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
   // 1. Normalisasi berkas yang sudah ada di sub.files (yang diunggah pemohon)
   const existingFiles: UploadedFileInfo[] = (Array.isArray(sub.files) ? sub.files : []).filter((f: any) => {
     if (!f) return false;
-    const rawUrl = f.googleDriveViewUrl || f.url || (typeof f === 'string' ? f : undefined);
-    // Abaikan tautan dokumen digital seperti spreadsheet, google forms, atau google docs non-file
-    if (rawUrl && (rawUrl.includes('docs.google.com/spreadsheets') || rawUrl.includes('docs.google.com/forms'))) {
+    const rawUrl = (f.googleDriveViewUrl || f.url || (typeof f === 'string' ? f : '')).toLowerCase();
+    // Abaikan tautan dokumen digital seperti spreadsheet, google forms, google docs non-file, atau folder
+    if (
+      rawUrl.includes('docs.google.com/spreadsheets') ||
+      rawUrl.includes('docs.google.com/forms') ||
+      rawUrl.includes('docs.google.com/document') ||
+      rawUrl.includes('docs.google.com/presentation') ||
+      rawUrl.includes('/folders/') ||
+      rawUrl.includes('drive.google.com/drive/folders')
+    ) {
       return false;
     }
-    return true;
+    return isPureUploadedFile(f);
   }).map((f: any, idx: number) => {
     const rawUrl = f.googleDriveViewUrl || f.url || (typeof f === 'string' ? f : undefined);
     const isDrive = rawUrl && (rawUrl.includes('drive.google.com') || rawUrl.includes('docs.google.com'));
-    const isFolder = rawUrl && rawUrl.includes('/folders/');
     
     let viewUrl = f.googleDriveViewUrl;
     let dlUrl = f.googleDriveDownloadUrl;
     if (rawUrl && !viewUrl) {
       viewUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
     }
-    if (viewUrl && isDrive && !isFolder && !dlUrl) {
+    if (viewUrl && isDrive && !dlUrl) {
       if (viewUrl.includes('/view')) {
         dlUrl = viewUrl.replace('/view', '/export?format=pdf');
       } else if (viewUrl.includes('open?id=')) {
@@ -242,9 +248,9 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
     return {
       fieldName: f.fieldName || `file_${idx + 1}`,
       label: f.label || f.fileName || `Berkas Unggahan ${idx + 1}`,
-      fileName: f.fileName || `Dokumen_Upload_${idx + 1}.${isFolder ? 'zip' : 'pdf'}`,
+      fileName: f.fileName || `Berkas_Upload_${idx + 1}.pdf`,
       fileSize: (typeof f.fileSize === 'number' && !isNaN(f.fileSize) && f.fileSize > 0) ? f.fileSize : 1024 * 1024,
-      fileType: f.fileType || (isFolder ? 'application/zip' : 'application/pdf'),
+      fileType: f.fileType || 'application/pdf',
       uploadedAt: f.uploadedAt || sub.submittedAt || new Date().toISOString(),
       dataUrl: f.dataUrl,
       googleDriveFileId: f.googleDriveFileId,
@@ -374,11 +380,15 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
 
     if (!alreadyListed) {
       const isDrive = !!(u && u.includes('drive.google.com'));
-      const isFolder = !!(u && u.includes('/folders/'));
+      const isFolder = !!(u && (u.includes('/folders/') || u.includes('drive.google.com/drive/folders')));
+      if (isFolder) {
+        // Folder Google Drive bukan berkas unggahan asli, jangan ditambahkan
+        return;
+      }
       const isImage = !!(u && /\.(jpe?g|png|webp|gif)($|\?)/i.test(u)) || (candidate.originalFileName && /\.(jpe?g|png|webp|gif)$/i.test(candidate.originalFileName));
 
       let downloadUrl: string | undefined = undefined;
-      if (isDrive && !isFolder && u) {
+      if (isDrive && u) {
         if (u.includes('/view')) {
           downloadUrl = u.replace('/view', '/export?format=pdf');
         } else if (u.includes('open?id=')) {
@@ -396,8 +406,8 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
 
       const fileNum = resultFiles.length + 1;
       const baseLabel = candidate.label || `Berkas Upload ${fileNum}`;
-      let ext = isFolder ? 'zip' : (isImage ? 'jpg' : 'pdf');
-      let mimeType = isFolder ? 'application/zip' : (isImage ? 'image/jpeg' : 'application/pdf');
+      let ext = isImage ? 'jpg' : 'pdf';
+      let mimeType = isImage ? 'image/jpeg' : 'application/pdf';
 
       const safeName = (candidate.originalFileName || baseLabel)
         .replace(/[^a-zA-Z0-9_\-\s]/g, '')
@@ -405,7 +415,7 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
         .replace(/\s+/g, '_')
         .substring(0, 40);
 
-      resultFiles.push({
+      const candidateObj: UploadedFileInfo = {
         fieldName: candidate.fieldName ? `${candidate.fieldName}_${fileNum}` : `file_${fileNum}`,
         label: baseLabel,
         fileName: candidate.originalFileName || `${safeName || 'Berkas_Upload'}_${fileNum}.${ext}`,
@@ -414,11 +424,15 @@ export function extractAllDriveFilesFromSubmission(sub: any): UploadedFileInfo[]
         uploadedAt: sub.submittedAt || new Date().toISOString(),
         googleDriveViewUrl: u || undefined,
         googleDriveDownloadUrl: downloadUrl
-      });
+      };
+
+      if (isPureUploadedFile(candidateObj)) {
+        resultFiles.push(candidateObj);
+      }
     }
   });
 
-  return resultFiles;
+  return resultFiles.filter(isPureUploadedFile);
 }
 
 // In-memory cache for synchronous render

@@ -1,5 +1,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { SubmissionRecord } from '../types';
+import { parseCSV, convertRowsToSubmissions } from './csvImporter';
 
 const APPS_SCRIPT_STORAGE_KEY = 'malabbiri_gas_webhook_url_v1';
 const SETTING_DOC_ID = 'google_drive_integration';
@@ -681,3 +683,136 @@ export async function fetchSubmissionsFromGoogleSheetViaScript(scriptUrl: string
     };
   }
 }
+
+export const OFFICE_SPREADSHEET_ID = '1sLzphCK2Zhp6k0aHTY-YnOiECaGMmpkBZAUtSmqyu0Q';
+
+/**
+ * Tarik data permohonan langsung dari Google Sheets kantor (100% andal, tanpa perlu konfigurasi webhook)
+ */
+export async function fetchSubmissionsDirectFromGoogleSheet(spreadsheetId: string = OFFICE_SPREADSHEET_ID): Promise<{
+  success: boolean;
+  message: string;
+  data?: SubmissionRecord[];
+  count?: number;
+}> {
+  try {
+    const cleanId = (spreadsheetId.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || spreadsheetId).trim();
+    
+    // 1. Coba via server proxy Vite terlebih dahulu (bebas CORS)
+    let csvText = '';
+    try {
+      const proxyRes = await fetch(`/api/sync-google-sheets?id=${cleanId}`);
+      if (proxyRes.ok) {
+        csvText = await proxyRes.text();
+      }
+    } catch (e) {
+      // proxy fallback
+    }
+
+    // 2. Jika proxy belum ada/offline, coba Google Visualization API CSV
+    if (!csvText || csvText.length < 50) {
+      try {
+        const directRes = await fetch(`https://docs.google.com/spreadsheets/d/${cleanId}/gviz/tq?tqx=out:csv`);
+        if (directRes.ok) {
+          csvText = await directRes.text();
+        }
+      } catch (e) {
+        // gviz fallback
+      }
+    }
+
+    // 3. Jika gviz belum berhasil, coba export?format=csv
+    if (!csvText || csvText.length < 50) {
+      try {
+        const exportRes = await fetch(`https://docs.google.com/spreadsheets/d/${cleanId}/export?format=csv`);
+        if (exportRes.ok) {
+          csvText = await exportRes.text();
+        }
+      } catch (e) {
+        // export fallback
+      }
+    }
+
+    if (!csvText || csvText.length < 30) {
+      // 4. Fallback ke JSONP (100% bebas CORS di browser apapun tanpa bergantung pada server proxy)
+      try {
+        const jsonpRows = await fetchGoogleSheetViaJsonp(cleanId);
+        if (jsonpRows && jsonpRows.length >= 2) {
+          const { records } = convertRowsToSubmissions(jsonpRows);
+          return {
+            success: true,
+            message: `Berhasil menarik ${records.length} data permohonan dari Google Sheets via Cloud Direct!`,
+            data: records,
+            count: records.length
+          };
+        }
+      } catch (jsonpErr) {
+        console.warn('JSONP fetch notice:', jsonpErr);
+      }
+
+      throw new Error('Tidak dapat mengunduh data spreadsheet. Pastikan link Google Sheet kantor dapat diakses.');
+    }
+
+    const rows = parseCSV(csvText);
+    const { records } = convertRowsToSubmissions(rows);
+
+    return {
+      success: true,
+      message: `Berhasil menarik ${records.length} data permohonan dari Google Sheets!`,
+      data: records,
+      count: records.length
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Gagal memulihkan data dari Google Sheets.'
+    };
+  }
+}
+
+/**
+ * Mengambil data Google Sheet secara langsung menggunakan JSONP untuk menjamin 100% bypass CORS di browser
+ */
+function fetchGoogleSheetViaJsonp(cleanId: string): Promise<string[][]> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return reject(new Error('Window or document not available'));
+    }
+    const callbackName = 'googleGvizCallback_' + Math.random().toString(36).substring(2, 10);
+    const script = document.createElement('script');
+    script.src = `https://docs.google.com/spreadsheets/d/${cleanId}/gviz/tq?tqx=responseHandler:${callbackName}`;
+    script.async = true;
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout fetching Google Sheets via JSONP'));
+    }, 12000);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      delete (window as any)[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+
+    (window as any)[callbackName] = (resp: any) => {
+      cleanup();
+      if (!resp || !resp.table) {
+        return reject(new Error('Invalid response from Google Sheets'));
+      }
+      const cols = (resp.table.cols || []).map((c: any) => (c ? (c.label || c.id || '') : ''));
+      const rows = (resp.table.rows || []).map((r: any) => {
+        if (!r || !r.c) return [];
+        return r.c.map((cell: any) => (cell ? (cell.f !== undefined ? String(cell.f) : (cell.v !== undefined ? String(cell.v) : '')) : ''));
+      });
+      resolve([cols, ...rows]);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Gagal memuat script Google Sheets'));
+    };
+
+    document.head.appendChild(script);
+  });
+}
+

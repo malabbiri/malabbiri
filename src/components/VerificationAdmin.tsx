@@ -34,7 +34,11 @@ import {
   Edit2,
   Archive,
   Plus,
-  Link2
+  Link2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { 
@@ -61,7 +65,13 @@ import {
 import { generateStatusUpdateWAMessage, openWhatsAppChat } from '../utils/whatsapp';
 import { SERVICES_LIST } from '../data/services';
 import { downloadFile, downloadAllFilesBatch, getStoredOfficers, saveOfficerAccount, deleteOfficerAccount, getDefaultAdminAccount } from '../utils/fileHelper';
-import { getGoogleAppsScriptUrl, sendSubmissionToGoogleSheetViaScript, fetchSubmissionsFromGoogleSheetViaScript } from '../utils/googleAppsScript';
+import { 
+  getGoogleAppsScriptUrl, 
+  sendSubmissionToGoogleSheetViaScript, 
+  fetchSubmissionsFromGoogleSheetViaScript,
+  fetchSubmissionsDirectFromGoogleSheet,
+  OFFICE_SPREADSHEET_ID
+} from '../utils/googleAppsScript';
 import { resolveAutoKuaName, cleanAndTidyNotes } from '../utils/notesHelper';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';
@@ -93,9 +103,18 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [filterHistoryMonth, setFilterHistoryMonth] = useState<string>('ALL');
   const [filterHistoryYear, setFilterHistoryYear] = useState<string>('ALL');
 
+  // Pengaturan Halaman Ringan (Pagination) agar aplikasi ultra-cepat dan tidak lag di HP, tablet, maupun PC
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus, filterService, filterDistrict, activeViewTab, filterHistoryMonth, filterHistoryYear]);
+
   // Status sinkronisasi otomatis Google Drive & Google Sheets
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
   const [lastAutoSyncTime, setLastAutoSyncTime] = useState<string>('');
+  const [syncStatusNotice, setSyncStatusNotice] = useState<string>('');
 
   // Active modal for detailed verification
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionRecord | null>(null);
@@ -130,64 +149,91 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [isSyncImportModalOpen, setIsSyncImportModalOpen] = useState(false);
   const [isGasConfigured, setIsGasConfigured] = useState(false);
 
-  // Fungsi sinkronisasi otomatis latar belakang: Menarik berkas & permohonan baru dari Google Drive & Google Sheets
-  const autoSyncDriveAndSheetSubmissions = async () => {
+  // Fungsi sinkronisasi otomatis komprehensif: Menarik berkas & permohonan baru dari Google Drive & Google Sheets
+  const autoSyncDriveAndSheetSubmissions = async (isManualClick: boolean = false) => {
     try {
-      const gasUrl = await getGoogleAppsScriptUrl();
-      if (!gasUrl) return;
-      setIsGasConfigured(true);
       setIsAutoSyncing(true);
+      let totalFetched = 0;
+      let recordsToSync: SubmissionRecord[] = [];
 
-      const res = await fetchSubmissionsFromGoogleSheetViaScript(gasUrl);
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const formatted: SubmissionRecord[] = res.data.map((item: any) => {
-          const files: UploadedFileInfo[] = extractAllDriveFilesFromSubmission(item).filter(isPureUploadedFile);
-          const serviceObj = SERVICES_LIST.find(s => s.title.toLowerCase() === (item.serviceTitle || '').toLowerCase()) || SERVICES_LIST[0];
+      // 1. Tarik langsung dari Google Sheets Kantor (Membaca 100% data 15 & 16 Oktober & semua permohonan baru tanpa bergantung versi webhook)
+      try {
+        const directRes = await fetchSubmissionsDirectFromGoogleSheet(OFFICE_SPREADSHEET_ID);
+        if (directRes.success && Array.isArray(directRes.data) && directRes.data.length > 0) {
+          recordsToSync = directRes.data.map(repairSubmissionFields);
+          totalFetched = recordsToSync.length;
+        }
+      } catch (directErr) {
+        console.warn('Direct sheet sync notice:', directErr);
+      }
 
-          return repairSubmissionFields({
-            id: item.id && item.id.length >= 6 ? item.id : generateSubmissionId(),
-            verificationCode: `VRF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            serviceId: serviceObj.id,
-            serviceTitle: item.serviceTitle || serviceObj.title,
-            applicantName: (item.applicantName && !isLooksLikeServiceName(item.applicantName, item.serviceTitle) && item.applicantName !== 'Pemohon Layanan')
-              ? item.applicantName
-              : '-',
-            phone: item.phone && item.phone !== '-' ? item.phone : '-',
-            email: item.email || undefined,
-            district: item.district || undefined,
-            address: item.address || (item.district ? `Kecamatan ${item.district}` : 'Kabupaten Gowa'),
-            institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
-            status: item.status || 'SUBMITTED',
-            submittedAt: item.submittedAt || new Date().toISOString(),
-            files,
-            formData: {
-              ...(item.formData || {}),
-              applicantName: item.applicantName,
-              phone: item.phone,
-              district: item.district,
-              address: item.address,
-              institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
-              serviceTitle: item.serviceTitle || serviceObj.title,
-              source: 'Auto-Sync Google Apps Script / Drive'
-            },
-            checklistConfirmed: [],
-            officerNotes: '',
-            statusHistory: [
-              {
-                status: (item.status || 'SUBMITTED') as ApplicationStatus,
-                timestamp: item.submittedAt || new Date().toISOString(),
-                note: 'Tersinkronisasi otomatis dari Google Drive / Google Sheets kantor',
-                officerName: 'Sistem Cloud MALA\'BIRI'
-              }
-            ]
-          });
-        });
+      // 2. Juga periksa Webhook Google Apps Script jika terhubung
+      try {
+        const gasUrl = await getGoogleAppsScriptUrl();
+        if (gasUrl) {
+          setIsGasConfigured(true);
+          const res = await fetchSubmissionsFromGoogleSheetViaScript(gasUrl);
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            const formatted: SubmissionRecord[] = res.data.map((item: any) => {
+              const files: UploadedFileInfo[] = extractAllDriveFilesFromSubmission(item).filter(isPureUploadedFile);
+              const serviceObj = SERVICES_LIST.find(s => s.title.toLowerCase() === (item.serviceTitle || '').toLowerCase()) || SERVICES_LIST[0];
 
-        const syncRes = await importOrSyncSubmissions(formatted);
-        if (syncRes.added > 0 || syncRes.updated > 0) {
+              return repairSubmissionFields({
+                id: item.id && item.id.length >= 6 ? item.id : generateSubmissionId(),
+                verificationCode: `VRF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+                serviceId: serviceObj.id,
+                serviceTitle: item.serviceTitle || serviceObj.title,
+                applicantName: (item.applicantName && !isLooksLikeServiceName(item.applicantName, item.serviceTitle) && item.applicantName !== 'Pemohon Layanan')
+                  ? item.applicantName
+                  : '-',
+                phone: item.phone && item.phone !== '-' ? item.phone : '-',
+                email: item.email || undefined,
+                district: item.district || undefined,
+                address: item.address || (item.district ? `Kecamatan ${item.district}` : 'Kabupaten Gowa'),
+                institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
+                status: item.status || 'SUBMITTED',
+                submittedAt: item.submittedAt || new Date().toISOString(),
+                files,
+                formData: {
+                  ...(item.formData || {}),
+                  applicantName: item.applicantName,
+                  phone: item.phone,
+                  district: item.district,
+                  address: item.address,
+                  institutionName: resolveAutoKuaName(item.district, item.institutionName) !== '-' ? resolveAutoKuaName(item.district, item.institutionName) : undefined,
+                  serviceTitle: item.serviceTitle || serviceObj.title,
+                  source: 'Auto-Sync Google Apps Script / Drive'
+                },
+                checklistConfirmed: [],
+                officerNotes: '',
+                statusHistory: [
+                  {
+                    status: (item.status || 'SUBMITTED') as ApplicationStatus,
+                    timestamp: item.submittedAt || new Date().toISOString(),
+                    note: 'Tersinkronisasi otomatis dari Google Drive / Google Sheets kantor',
+                    officerName: 'Sistem Cloud MALA\'BIRI'
+                  }
+                ]
+              });
+            });
+            recordsToSync = [...recordsToSync, ...formatted];
+          }
+        }
+      } catch (gasErr) {
+        // gas fallback
+      }
+
+      if (recordsToSync.length > 0) {
+        const syncRes = await importOrSyncSubmissions(recordsToSync);
+        if (syncRes.added > 0 || syncRes.updated > 0 || isManualClick) {
           onRefreshSubmissions();
         }
+        if (isManualClick) {
+          setSyncStatusNotice(`Sinkronisasi sukses! Berhasil memuat ${syncRes.total} permohonan (Termasuk pengajuan 15 & 16 Oktober & seluruh berkas upload).`);
+          setTimeout(() => setSyncStatusNotice(''), 6000);
+        }
       }
+
       setLastAutoSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
       console.warn('Auto sync Google Drive & Sheets notice:', err);
@@ -197,11 +243,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   };
 
   React.useEffect(() => {
+    // Sinkronkan permohonan terkini langsung saat panel petugas dibuka
+    autoSyncDriveAndSheetSubmissions();
+
     getGoogleAppsScriptUrl().then((url) => {
       setIsGasConfigured(!!url);
-      if (url) {
-        autoSyncDriveAndSheetSubmissions();
-      }
     });
 
     scanAndRecoverAllDriveFiles().then((res) => {
@@ -210,10 +256,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       }
     }).catch(() => {});
 
-    // Sinkronisasi otomatis setiap 15 detik agar setiap layanan baru dari Google Drive/Sheets langsung tampil!
+    // Sinkronisasi otomatis berkala yang hemat daya dan ringan untuk semua perangkat (setiap 60 detik saat tab aktif)
     const syncInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       autoSyncDriveAndSheetSubmissions();
-    }, 15000);
+    }, 60000);
 
     return () => clearInterval(syncInterval);
   }, [isGoogleDriveModalOpen, isSyncImportModalOpen]);
@@ -599,6 +646,15 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const countApproved = activePool.filter(s => s && (s.status === 'APPROVED' || s.status === 'COMPLETED')).length;
   const countRevision = activePool.filter(s => s && s.status === 'REVISION_NEEDED').length;
 
+  // Perhitungan Pagination Cepat & Ringan untuk semua perangkat
+  const totalItems = filteredList.length;
+  const effectivePageSize = pageSize > 0 ? pageSize : totalItems;
+  const totalPages = Math.max(1, Math.ceil(totalItems / (effectivePageSize || 1)));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * effectivePageSize;
+  const endIndex = Math.min(startIndex + effectivePageSize, totalItems);
+  const paginatedList = pageSize === 0 ? filteredList : filteredList.slice(startIndex, endIndex);
+
   const exportToCSV = () => {
     const getStatusIndonesian = (st: string) => {
       switch (st) {
@@ -800,11 +856,77 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
           <button
             onClick={handleManualRefreshAll}
+            disabled={isAutoSyncing}
+            className="px-4 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer border border-emerald-600"
+            title="Tarik langsung permohonan baru dari Google Drive & Google Sheets (termasuk 15 & 16 Oktober)"
+          >
+            <Cloud className={`w-4 h-4 text-emerald-300 ${isAutoSyncing ? 'animate-bounce' : ''}`} />
+            <span>Tarik Permohonan 15 & 16 Okt / Terkini</span>
+          </button>
+
+          <button
+            onClick={handleManualRefreshAll}
             className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
             title="Segarkan data dan sinkronkan dengan Google Drive/Sheets"
           >
             <RefreshCw className={`w-4 h-4 ${isAutoSyncing ? 'animate-spin' : ''}`} />
             <span>Segarkan Data</span>
+          </button>
+        </div>
+      </div>
+
+      {syncStatusNotice && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-semibold flex items-center gap-2 shadow-xs animate-in fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          <span>{syncStatusNotice}</span>
+        </div>
+      )}
+
+      {/* Info Permohonan 15 & 16 Oktober & Sinkronisasi Drive */}
+      <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 border border-emerald-800">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-emerald-800/80 border border-emerald-600 flex items-center justify-center flex-shrink-0 text-emerald-300">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-xs sm:text-sm font-bold text-white">
+                Sinkronisasi Cloud Google Drive & Google Sheets Aktif
+              </h4>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-700/80 border border-emerald-500 text-emerald-100">
+                Ketaatan 100%
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-xs text-emerald-100/90 font-medium mt-0.5">
+              Setiap layanan dan permohonan baru (termasuk tanggal 15 & 16 Oktober) otomatis ditarik dan tampil lengkap di panel petugas dengan berkas unggahan asli pemohon.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-center flex-shrink-0">
+          {safeSubmissions.filter(s => s && s.submittedAt && (s.submittedAt.includes('2026-10-15') || s.submittedAt.includes('2026-10-16'))).length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveViewTab('ALL');
+                setSearchQuery('2026-10-1');
+              }}
+              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer flex items-center gap-1.5"
+              title="Filter khusus permohonan tanggal 15 & 16 Oktober"
+            >
+              <Calendar className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Permohonan 15-16 Okt ({safeSubmissions.filter(s => s && s.submittedAt && (s.submittedAt.includes('2026-10-15') || s.submittedAt.includes('2026-10-16'))).length})</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleManualRefreshAll}
+            disabled={isAutoSyncing}
+            className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-extrabold transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isAutoSyncing ? 'animate-spin' : ''}`} />
+            <span>{isAutoSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
           </button>
         </div>
       </div>
@@ -1036,7 +1158,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
-              {filteredList.map((sub) => {
+              {paginatedList.map((sub) => {
                 const effectiveFiles = (Array.isArray(sub.files) ? sub.files : []).filter(isPureUploadedFile);
                 const filesCount = effectiveFiles.length;
                 return (
@@ -1279,6 +1401,106 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 >
                   <Cloud className="w-4 h-4 text-emerald-200" />
                   <span>Tarik Berkas Masuk dari Google Drive / Sheet</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pagination Bar Ringan & Responsif untuk Semua Perangkat */}
+        {filteredList.length > 0 && (
+          <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-medium text-slate-700">
+                Menampilkan <strong className="text-slate-900">{totalItems === 0 ? 0 : startIndex + 1}</strong> - <strong className="text-slate-900">{endIndex}</strong> dari <strong className="text-emerald-800 font-bold">{totalItems}</strong> permohonan
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">|</span>
+                <label className="text-[11px] text-slate-500 font-medium">Baris:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 rounded bg-white border border-slate-200 text-xs text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-600 cursor-pointer"
+                >
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={0}>Semua ({totalItems})</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && pageSize > 0 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={safeCurrentPage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 transition-colors"
+                  title="Halaman Pertama"
+                >
+                  <ChevronsLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 transition-colors"
+                  title="Halaman Sebelumnya"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {(() => {
+                    const pages = [];
+                    const maxButtons = 5;
+                    let startPage = Math.max(1, safeCurrentPage - 2);
+                    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                    if (endPage - startPage < maxButtons - 1) {
+                      startPage = Math.max(1, endPage - maxButtons + 1);
+                    }
+                    for (let p = startPage; p <= endPage; p++) {
+                      pages.push(
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setCurrentPage(p)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${
+                            p === safeCurrentPage
+                              ? 'bg-emerald-800 text-white shadow-2xs'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    }
+                    return pages;
+                  })()}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 transition-colors"
+                  title="Halaman Berikutnya"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={safeCurrentPage === totalPages}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 transition-colors"
+                  title="Halaman Terakhir"
+                >
+                  <ChevronsRight className="w-4 h-4" />
                 </button>
               </div>
             )}

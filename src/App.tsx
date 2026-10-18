@@ -43,8 +43,13 @@ import {
   getStoredSubmissions, 
   getStoredSurveys,
   subscribeToSubmissions,
-  subscribeToSurveys
+  subscribeToSurveys,
+  importOrSyncSubmissions
 } from './utils/storage';
+import { 
+  fetchSubmissionsDirectFromGoogleSheet, 
+  OFFICE_SPREADSHEET_ID 
+} from './utils/googleAppsScript';
 import { 
   getOfficerSession, 
   clearOfficerSession 
@@ -86,6 +91,15 @@ export default function App() {
   useEffect(() => {
     // Initial fetch
     loadData();
+
+    // Sinkronisasi otomatis data permohonan dari Google Sheets & Drive kantor saat aplikasi dimuat
+    fetchSubmissionsDirectFromGoogleSheet(OFFICE_SPREADSHEET_ID).then((res) => {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        importOrSyncSubmissions(res.data).then(() => {
+          loadData();
+        }).catch(() => {});
+      }
+    }).catch(() => {});
 
     // Real-time Cloud Sync across HP, Laptop, and PC
     const unsubscribeSubmissions = subscribeToSubmissions((latestSubmissions) => {
