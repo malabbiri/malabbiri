@@ -1,8 +1,9 @@
 {
   "projectId": "malabbiri-71486",
-  "appId": "1:844568523844:web:b52d3d6bba60f296017811",
+  "appId": "1:844568523844:web:6ad363a8a51991e4017811",
   "apiKey": "AIzaSyAl1wGkexJkobvYnA2PSNgPM-yjcsrGKVk",
   "authDomain": "malabbiri-71486.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-malabiribimasisl-c77c337b-a93a-44fc-9160-880cbd5b5e93",
   "storageBucket": "malabbiri-71486.firebasestorage.app",
   "messagingSenderId": "844568523844",
   "measurementId": "",

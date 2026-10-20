@@ -44,7 +44,8 @@ import {
   getStoredSurveys,
   subscribeToSubmissions,
   subscribeToSurveys,
-  importOrSyncSubmissions
+  importOrSyncSubmissions,
+  fetchSubmissionsDirectFromCloud
 } from './utils/storage';
 import { 
   fetchSubmissionsDirectFromGoogleSheet, 
@@ -89,11 +90,17 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Initial fetch
+    // 1. Muat data instan dari cache lokal
     loadData();
 
-    // Sinkronisasi data permohonan dari Google Sheets & Drive kantor secara cerdas & hemat kuota
-    // Jika data lokal sudah ada dan baru disinkronkan kurang dari 15 menit, lewati download berat agar HP/Laptop ringan
+    // 2. Tarik data permohonan terkini langsung dari Cloud Firestore (multi-perangkat real-time)
+    fetchSubmissionsDirectFromCloud().then((latest) => {
+      if (latest && latest.length > 0) {
+        setSubmissions(latest);
+      }
+    }).catch(() => {});
+
+    // 3. Sinkronisasi data permohonan dari Google Sheets & Drive kantor di latar belakang
     const lastSheetSync = Number(localStorage.getItem('malabbiri_last_sheet_sync_ts') || '0');
     const isCacheStale = Date.now() - lastSheetSync > 15 * 60 * 1000;
     const currentLocalCount = getStoredSubmissions().length;

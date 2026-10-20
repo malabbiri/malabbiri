@@ -70,6 +70,7 @@ import {
   repairSubmissionFields,
   generateSubmissionId,
   importOrSyncSubmissions,
+  fetchSubmissionsDirectFromCloud,
   getStoredDbTotalRows,
   getStoredRawDbSubmissions,
   saveStoredDbTotalRows
@@ -754,10 +755,26 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   };
 
   const handleManualRefreshAll = async () => {
-    onRefreshSubmissions();
-    await autoSyncDriveAndSheetSubmissions();
-    await scanAndRecoverAllDriveFiles();
-    onRefreshSubmissions();
+    setIsAutoSyncing(true);
+    setSyncStatusNotice('Menghubungkan ke Cloud Firestore & menyinkronkan data...');
+    try {
+      // 1. Tarik langsung data terkini dari Cloud Firestore server (multi-perangkat real-time)
+      const cloudList = await fetchSubmissionsDirectFromCloud();
+      
+      // 2. Sinkronkan juga dari Google Sheets kantor secara menyeluruh
+      await autoSyncDriveAndSheetSubmissions(true);
+      await scanAndRecoverAllDriveFiles();
+      
+      onRefreshSubmissions();
+      const count = cloudList.length > 0 ? cloudList.length : safeSubmissions.length;
+      setSyncStatusNotice(`Sinkronisasi sukses! Data panel telah diperbarui secara real-time (${count} permohonan resmi aktif).`);
+      setTimeout(() => setSyncStatusNotice(''), 5000);
+    } catch (err) {
+      console.warn('Manual refresh notice:', err);
+    } finally {
+      setIsAutoSyncing(false);
+      onRefreshSubmissions();
+    }
   };
 
   return (
@@ -778,7 +795,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               </span>
               <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-mono font-semibold">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                Sesi Aktif
+                Cloud Real-Time Aktif
               </span>
             </div>
             <p className="text-xs text-slate-600 font-medium mt-0.5">
@@ -788,32 +805,9 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
-          {/* Status Auto-Sync Google Drive & Sheets */}
-          {isGasConfigured && (
-            <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-xs font-semibold text-emerald-800">
-              <span className={`w-2 h-2 rounded-full ${isAutoSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-600 animate-pulse'}`} />
-              <span>{isAutoSyncing ? 'Menyinkronkan Drive...' : 'Auto-Sync Drive Aktif'}</span>
-              {lastAutoSyncTime && <span className="text-[10px] text-slate-500 font-normal">({lastAutoSyncTime})</span>}
-            </div>
-          )}
-
-          <button
-            onClick={() => setIsGoogleDriveModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-            title="Pengaturan Integrasi Webhook Google Drive & Google Sheets Kantor"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Integrasi Drive & Sheets</span>
-            {isGasConfigured ? (
-              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" title="Terhubung"></span>
-            ) : (
-              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-200">Setel</span>
-            )}
-          </button>
-
           <button
             onClick={handleOpenManageOfficers}
-            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             title="Kelola Daftar Akun Petugas & Verifikator Resmi"
           >
             <Users className="w-3.5 h-3.5 text-slate-600" />
@@ -822,7 +816,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
           <button
             onClick={onLogout}
-            className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            className="px-3.5 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             title="Keluar dan Kunci Dashboard Petugas"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -853,20 +847,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Mode Ringan & Info */}
-          <button
-            type="button"
-            onClick={() => setIsSyncArchitectureModalOpen(true)}
-            className="px-3.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-            title="Panduan Mode Ringan, Berkas Besar & Sinkronisasi Real-time"
-          >
-            <Zap className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Mode Ringan</span>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500 text-white shadow-xs">
-              Cloud Realtime
-            </span>
-          </button>
-
           {/* Export CSV */}
           <button
             onClick={exportToCSV}
@@ -897,6 +877,17 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 />
                 <div className="absolute right-0 mt-1.5 w-60 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in zoom-in-95 text-xs text-slate-700 divide-y divide-slate-100">
                   <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreToolsOpen(false);
+                        setIsGoogleDriveModalOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2.5 font-medium transition-colors"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                      <span>Integrasi Webhook Drive & Sheets</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => {

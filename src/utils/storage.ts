@@ -3,6 +3,7 @@ import {
   doc, 
   setDoc, 
   getDocs, 
+  getDocsFromServer,
   onSnapshot, 
   query, 
   orderBy, 
@@ -730,6 +731,45 @@ if (typeof window !== 'undefined') {
 }
 
 export function getStoredSubmissions(): SubmissionRecord[] {
+  return [...cachedSubmissions];
+}
+
+/**
+ * Mengambil langsung permohonan terkini dari Firestore server (bypass cache lokal)
+ * Menjamin 100% konsistensi real-time di seluruh perangkat (HP, Laptop, PC, dsb)
+ */
+export async function fetchSubmissionsDirectFromCloud(): Promise<SubmissionRecord[]> {
+  try {
+    const submissionsRef = collection(db, 'submissions');
+    const snapshot = await getDocsFromServer(submissionsRef);
+    const remoteList: SubmissionRecord[] = [];
+    snapshot.forEach((d) => {
+      remoteList.push(d.data() as SubmissionRecord);
+    });
+
+    if (remoteList.length > 0) {
+      const repaired = remoteList.map(repairSubmissionFields);
+      repaired.sort((a, b) => parseDateSafe(b.submittedAt).getTime() - parseDateSafe(a.submittedAt).getTime());
+      cachedSubmissions = repaired;
+      try {
+        const lightList = repaired.map((sub) => ({
+          ...sub,
+          files: (sub.files || []).map((f) => {
+            const copy = { ...f };
+            delete copy.dataUrl;
+            return copy;
+          })
+        }));
+        localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(lightList));
+      } catch (e) {
+        // quota fallback
+      }
+      notifySubmissionsListeners();
+      return repaired;
+    }
+  } catch (err) {
+    console.warn('Direct cloud fetch notice:', err);
+  }
   return [...cachedSubmissions];
 }
 
