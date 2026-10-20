@@ -32,6 +32,7 @@ import {
 import { 
   PrintReceiptModal 
 } from './components/PrintReceiptModal';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { 
   ServiceDefinition, 
@@ -60,6 +61,7 @@ import {
 } from './utils/whatsapp';
 import { MessageCircle } from 'lucide-react';
 import { APP_INFO } from './data/services';
+import { MobileBottomNav } from './components/MobileBottomNav';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'services' | 'tracking' | 'verification' | 'stats' | 'survey'>('services');
@@ -167,8 +169,8 @@ export default function App() {
         isOfficerLoggedIn={!!officerSession?.isLoggedIn}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1">
+      {/* Main Content Area with bottom padding for mobile dock */}
+      <main className="flex-1 pb-20 md:pb-0">
         {activeTab === 'services' && (
           <div>
             <HeroBanner
@@ -248,8 +250,8 @@ export default function App() {
       {/* Footer with Office Info & Socials */}
       <ContactFooter />
 
-      {/* Floating WhatsApp Hotline Button */}
-      <div className="fixed bottom-6 right-6 z-40">
+      {/* Floating WhatsApp Hotline Button (Above Mobile Nav on Phones) */}
+      <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40">
         <button
           onClick={() => openHotlineWhatsApp()}
           className="p-3.5 sm:px-4 sm:py-2.5 rounded-full sm:rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md flex items-center gap-2 transition-colors active:scale-95 border border-emerald-800 cursor-pointer"
@@ -259,6 +261,14 @@ export default function App() {
           <span className="hidden sm:inline">WhatsApp Bimas Islam</span>
         </button>
       </div>
+
+      {/* Mobile Bottom Navigation Bar (Dock Khusus Layar HP) */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        pendingCount={pendingCount}
+        isOfficerLoggedIn={!!officerSession?.isLoggedIn}
+      />
 
       {/* Service Dynamic Form Modal */}
       {selectedServiceForForm && (
@@ -280,6 +290,9 @@ export default function App() {
           onClose={() => setActiveReceiptSubmission(null)}
         />
       )}
+
+      {/* Mobile PWA Install Prompt for HP / Smartphone */}
+      <PwaInstallPrompt />
     </div>
   );
 }

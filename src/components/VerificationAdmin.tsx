@@ -46,7 +46,11 @@ import {
   Smartphone,
   Zap,
   HelpCircle,
-  HardDrive
+  HardDrive,
+  EyeOff,
+  Flame,
+  ShieldAlert,
+  Bell
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { 
@@ -129,11 +133,70 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
   // Pengaturan Halaman Ringan (Pagination) agar aplikasi ultra-cepat dan tidak lag di HP, tablet, maupun PC
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(25);
+  const [pageSize, setPageSize] = useState<number>(15);
+
+  // Mode Privasi Data Sensitif: Sensor nomor HP pemohon di layar saat diakses di HP/tempat umum
+  const [isPrivacyMasked, setIsPrivacyMasked] = useState<boolean>(false);
+
+  // Filter Sensitivitas SLA / Tingkat Urgensi Pelayanan
+  const [slaFilter, setSlaFilter] = useState<'ALL' | 'URGENT' | 'FRESH'>('ALL');
+
+  // Helper untuk menghitung SLA dan status urgensi berkas masuk secara sensitif
+  const getSlaUrgencyInfo = (submittedAt?: string, status?: ApplicationStatus) => {
+    if (!submittedAt) return null;
+    if (status === 'APPROVED' || status === 'COMPLETED' || status === 'REJECTED') {
+      return null;
+    }
+    const time = parseDateSafe(submittedAt).getTime();
+    if (time <= 0) return null;
+    const diffHours = Math.floor((Date.now() - time) / (1000 * 60 * 60));
+    if (diffHours < 12) {
+      return {
+        level: 'FRESH',
+        label: 'Baru Masuk',
+        hours: diffHours,
+        badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+        dotClass: 'bg-emerald-600 animate-pulse'
+      };
+    } else if (diffHours < 24) {
+      return {
+        level: 'NORMAL',
+        label: `SLA ${diffHours}j`,
+        hours: diffHours,
+        badgeClass: 'bg-blue-50 text-blue-800 border-blue-200',
+        dotClass: 'bg-blue-500'
+      };
+    } else if (diffHours < 48) {
+      return {
+        level: 'WARNING',
+        label: 'Perhatian (>24j)',
+        hours: diffHours,
+        badgeClass: 'bg-amber-50 text-amber-900 border-amber-300 font-bold',
+        dotClass: 'bg-amber-500 animate-ping'
+      };
+    } else {
+      return {
+        level: 'CRITICAL',
+        label: `Mendesak (${Math.max(1, Math.floor(diffHours / 24))}h lalu)`,
+        hours: diffHours,
+        badgeClass: 'bg-rose-50 text-rose-900 border-rose-300 font-extrabold shadow-2xs animate-pulse',
+        dotClass: 'bg-rose-600 animate-ping'
+      };
+    }
+  };
+
+  const maskSensitivePhone = (phone?: string) => {
+    if (!phone || phone === '-') return '-';
+    if (!isPrivacyMasked) return phone;
+    if (phone.length <= 6) return '••••••';
+    const start = phone.substring(0, 4);
+    const end = phone.substring(phone.length - 3);
+    return `${start}••••${end}`;
+  };
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, filterService, filterDistrict, activeViewTab, filterHistoryMonth, filterHistoryYear, sortOrder]);
+  }, [searchQuery, filterStatus, filterService, filterDistrict, activeViewTab, filterHistoryMonth, filterHistoryYear, sortOrder, slaFilter]);
 
   // Status sinkronisasi otomatis Google Drive & Google Sheets
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
@@ -684,7 +747,17 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       }
     }
 
-    return matchesSearch && matchesStatus && matchesService && matchesDistrict && matchesHistoryTime;
+    let matchesSla = true;
+    if (slaFilter !== 'ALL') {
+      const sla = getSlaUrgencyInfo(sub.submittedAt, sub.status);
+      if (slaFilter === 'URGENT') {
+        matchesSla = !!sla && (sla.level === 'CRITICAL' || sla.level === 'WARNING');
+      } else if (slaFilter === 'FRESH') {
+        matchesSla = !!sla && sla.level === 'FRESH';
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesService && matchesDistrict && matchesHistoryTime && matchesSla;
   });
 
   // Urutkan data secara otomatis: Default adalah 'NEWEST' (Terbaru selalu di baris paling atas)
@@ -701,6 +774,18 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const countPending = activePool.filter(s => s && (s.status === 'SUBMITTED' || s.status === 'VERIFYING')).length;
   const countApproved = activePool.filter(s => s && (s.status === 'APPROVED' || s.status === 'COMPLETED')).length;
   const countRevision = activePool.filter(s => s && s.status === 'REVISION_NEEDED').length;
+  const countUrgent = activePool.filter(s => {
+    if (!s || s.status === 'APPROVED' || s.status === 'COMPLETED' || s.status === 'REJECTED') return false;
+    const time = parseDateSafe(s.submittedAt).getTime();
+    if (time <= 0) return false;
+    return (Date.now() - time) / (1000 * 60 * 60) >= 24;
+  }).length;
+  const countFreshNew = activePool.filter(s => {
+    if (!s || (s.status !== 'SUBMITTED' && s.status !== 'VERIFYING')) return false;
+    const time = parseDateSafe(s.submittedAt).getTime();
+    if (time <= 0) return false;
+    return (Date.now() - time) / (1000 * 60 * 60) <= 24;
+  }).length;
 
   // Perhitungan Pagination Cepat & Ringan untuk semua perangkat
   const totalItems = sortedFilteredList.length;
@@ -962,6 +1047,39 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </div>
       )}
 
+      {/* Sensitivitas Real-Time: Deteksi Permohonan Baru Masuk */}
+      {countFreshNew > 0 && (
+        <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-900 text-white rounded-xl p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-emerald-600 animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3.5 w-3.5 flex-shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-400"></span>
+            </span>
+            <div>
+              <div className="font-bold text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                <span>Sensitivitas Real-Time Terdeteksi</span>
+                <span className="bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full text-[11px] font-black">
+                  {countFreshNew} Permohonan Baru Masuk
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-100 mt-0.5 font-normal">
+                Permohonan baru warga otomatis tampil di panel petugas dan tersimpan di database MALA'BIRI tanpa perlu refresh manual.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterStatus('SUBMITTED');
+              setSlaFilter('FRESH');
+            }}
+            className="px-3.5 py-1.5 rounded-lg bg-white text-emerald-950 font-bold text-xs hover:bg-emerald-50 transition-colors shadow-xs self-start sm:self-center cursor-pointer whitespace-nowrap active:scale-95"
+          >
+            Tampilkan Permohonan Baru ({countFreshNew})
+          </button>
+        </div>
+      )}
+
       {/* Tab Navigasi: Semua Permohonan vs Bulan Berjalan vs Riwayat Layanan vs Arsip Lengkap */}
       <div className="bg-white border border-slate-200 rounded-xl p-2 sm:p-2.5 shadow-xs flex flex-wrap items-center gap-1.5 sm:gap-2">
         <button
@@ -1039,38 +1157,60 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
         </button>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs text-slate-500 font-medium block mb-1">
-            {activeViewTab === 'RAW_DATABASE' ? 'Seluruh Arsip Terdaftar' : (activeViewTab === 'ALL' ? 'Total Permohonan Masuk' : (activeViewTab === 'CURRENT_MONTH' ? 'Permohonan Bulan Ini' : 'Total Riwayat Layanan'))}
+      {/* Summary KPI Cards - Sensitif terhadap beban kerja & SLA */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span className="text-[11px] text-slate-500 font-medium block mb-1">
+            {activeViewTab === 'RAW_DATABASE' ? 'Seluruh Arsip' : (activeViewTab === 'ALL' ? 'Total Layanan' : (activeViewTab === 'CURRENT_MONTH' ? 'Bulan Berjalan' : 'Riwayat Layanan'))}
           </span>
-          <span className="text-2xl font-bold text-slate-900">{activePool.length}</span>
-          <span className="text-[10px] text-slate-500 block mt-1 font-medium">
-            Basis Data MALA'BIRI
-          </span>
+          <span className="text-xl sm:text-2xl font-bold text-slate-900">{activePool.length}</span>
+          <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">Basis Data MALA'BIRI</span>
         </div>
 
-        <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200 shadow-xs">
-          <span className="text-xs text-amber-800 font-semibold block mb-1">Menunggu / Diverifikasi</span>
-          <span className="text-2xl font-bold text-amber-700">{countPending}</span>
-          <span className="text-[10px] text-amber-700 block mt-1 font-medium">Perlu ditindaklanjuti</span>
+        {/* Card Sensitivitas SLA Prioritas */}
+        <div 
+          onClick={() => {
+            setFilterStatus('ALL');
+            setSlaFilter(prev => prev === 'URGENT' ? 'ALL' : 'URGENT');
+          }}
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-xs ${
+            slaFilter === 'URGENT'
+              ? 'bg-rose-100/90 border-rose-400 ring-2 ring-rose-500'
+              : 'bg-rose-50/70 border-rose-200 hover:bg-rose-100/60'
+          }`}
+          title="Klik untuk menyaring permohonan yang mendesak / lebih dari 24 jam belum selesai"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-rose-800 font-bold block mb-1 flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5 text-rose-600" />
+              <span>Prioritas &gt;24j</span>
+            </span>
+            {countUrgent > 0 && <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />}
+          </div>
+          <span className="text-xl sm:text-2xl font-bold text-rose-700">{countUrgent}</span>
+          <span className="text-[10px] text-rose-700 block mt-0.5 font-medium">Perlu Respon Segera</span>
         </div>
 
-        <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-200 shadow-xs">
-          <span className="text-xs text-emerald-800 font-semibold block mb-1">Disetujui & Selesai</span>
-          <span className="text-2xl font-bold text-emerald-700">{countApproved}</span>
-          <span className="text-[10px] text-emerald-700 block mt-1 font-medium">SKT / Rekomendasi Terbit</span>
+        <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 shadow-xs">
+          <span className="text-[11px] text-amber-800 font-semibold block mb-1">Menunggu Verifikasi</span>
+          <span className="text-xl sm:text-2xl font-bold text-amber-700">{countPending}</span>
+          <span className="text-[10px] text-amber-700 block mt-0.5 font-medium">Perlu ditindaklanjuti</span>
         </div>
 
-        <div className="bg-rose-50/70 p-4 rounded-xl border border-rose-200 shadow-xs">
-          <span className="text-xs text-rose-800 font-semibold block mb-1">Perlu Perbaikan (Revisi)</span>
-          <span className="text-2xl font-bold text-rose-700">{countRevision}</span>
-          <span className="text-[10px] text-rose-700 block mt-1 font-medium">Menunggu respon pemohon</span>
+        <div className="bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 shadow-xs">
+          <span className="text-[11px] text-emerald-800 font-semibold block mb-1">Disetujui / Selesai</span>
+          <span className="text-xl sm:text-2xl font-bold text-emerald-700">{countApproved}</span>
+          <span className="text-[10px] text-emerald-700 block mt-0.5 font-medium">SKT / Rekomendasi Terbit</span>
+        </div>
+
+        <div className="bg-rose-50/70 p-3.5 rounded-xl border border-rose-200 shadow-xs">
+          <span className="text-[11px] text-rose-800 font-semibold block mb-1">Perlu Revisi</span>
+          <span className="text-xl sm:text-2xl font-bold text-rose-700">{countRevision}</span>
+          <span className="text-[10px] text-rose-700 block mt-0.5 font-medium">Menunggu respon pemohon</span>
         </div>
       </div>
 
-      {/* Filters Bar */}
+      {/* Filters Bar & Kontrol Sensitivitas */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
         <div className={`grid grid-cols-1 sm:grid-cols-2 ${activeViewTab === 'HISTORY' ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} gap-3`}>
           {/* Search */}
@@ -1177,11 +1317,70 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             </>
           )}
         </div>
+
+        {/* Quick Filter Badges & Sensitivity Control */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] text-slate-500 font-medium">Sensitivitas SLA:</span>
+            <button
+              type="button"
+              onClick={() => setSlaFilter('ALL')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                slaFilter === 'ALL'
+                  ? 'bg-slate-800 text-white shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              Semua
+            </button>
+            <button
+              type="button"
+              onClick={() => setSlaFilter('FRESH')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                slaFilter === 'FRESH'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Baru Masuk (&lt;12j)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSlaFilter('URGENT')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                slaFilter === 'URGENT'
+                  ? 'bg-rose-700 text-white shadow-2xs'
+                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-ping" />
+              <span>Prioritas &gt;24j ({countUrgent})</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsPrivacyMasked(!isPrivacyMasked)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                isPrivacyMasked
+                  ? 'bg-amber-100 border-amber-300 text-amber-950 font-bold shadow-2xs'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+              }`}
+              title="Sensor nomor WhatsApp/HP pemohon untuk menjaga kerahasiaan saat membuka aplikasi di HP"
+            >
+              {isPrivacyMasked ? <EyeOff className="w-3.5 h-3.5 text-amber-700" /> : <Eye className="w-3.5 h-3.5 text-slate-500" />}
+              <span>{isPrivacyMasked ? 'Sensor Kontak Aktif' : 'Sensor Kontak HP'}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Submissions Table */}
+      {/* Submissions Container */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        {/* Desktop View: Tabular Grid (Layar Komputer & Laptop) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700">
             <thead className="bg-slate-100 text-[11px] uppercase font-bold text-slate-700 border-b border-slate-200">
               <tr>
@@ -1212,13 +1411,23 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               {paginatedList.map((sub) => {
                 const effectiveFiles = (Array.isArray(sub.files) ? sub.files : []).filter(isPureUploadedFile);
                 const filesCount = effectiveFiles.length;
+                const slaInfo = getSlaUrgencyInfo(sub.submittedAt, sub.status);
+
                 return (
                 <tr key={sub.id || Math.random().toString()} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3.5 font-mono font-bold text-emerald-800 whitespace-nowrap">
                     {sub.id || '-'}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap text-slate-500 text-[11px] font-medium">
-                    {sub.submittedAt ? formatIndoDate(sub.submittedAt) : '-'}
+                    <div>{sub.submittedAt ? formatIndoDate(sub.submittedAt) : '-'}</div>
+                    {slaInfo && (
+                      <div className="mt-1">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${slaInfo.badgeClass}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${slaInfo.dotClass}`} />
+                          <span>{slaInfo.label}</span>
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 font-semibold text-slate-900 max-w-[200px] truncate" title={sub.serviceTitle}>
                     {sub.serviceTitle || 'Layanan'}
@@ -1276,8 +1485,21 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                               <span>(Belum ada nama)</span>
                             </button>
                           )}
-                          <div className="text-[11px] text-slate-500 font-mono font-medium">
-                            {resolvedPhone || '-'}
+                          <div className="text-[11px] text-slate-500 font-mono font-medium flex items-center gap-1.5">
+                            <span>{maskSensitivePhone(resolvedPhone)}</span>
+                            {resolvedPhone && resolvedPhone !== '-' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const msg = generateStatusUpdateWAMessage(sub, sub.status, undefined);
+                                  openWhatsAppChat(resolvedPhone, msg);
+                                }}
+                                className="text-emerald-700 hover:text-emerald-800 transition-colors p-0.5 rounded hover:bg-emerald-50 cursor-pointer"
+                                title="Chat WhatsApp Pemohon"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 fill-current text-emerald-600 inline" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -1427,6 +1649,217 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View: Tampilan Kartu Responsif Khusus Layar HP / Smartphone */}
+        <div className="md:hidden divide-y divide-slate-200">
+          {paginatedList.map((sub) => {
+            const effectiveFiles = (Array.isArray(sub.files) ? sub.files : []).filter(isPureUploadedFile);
+            const filesCount = effectiveFiles.length;
+            const slaInfo = getSlaUrgencyInfo(sub.submittedAt, sub.status);
+            const autoKua = resolveAutoKuaName(sub.district, sub.institutionName);
+
+            // Bersihkan nama pemohon dari salah masuknya judul formulir
+            const isBadName = isLooksLikeServiceName(sub.applicantName, sub.serviceTitle) || !sub.applicantName || sub.applicantName === 'Pemohon Layanan';
+            const candidateName = isBadName
+              ? (sub.formData?.applicantName || sub.formData?.['Nama Lengkap Penyuluh'] || sub.formData?.['Nama Lengkap'] || sub.formData?.['Nama Pemohon'] || sub.formData?.nama)
+              : sub.applicantName;
+            const resolvedName = (candidateName && !isLooksLikeServiceName(candidateName, sub.serviceTitle) && candidateName.trim() !== '-')
+              ? candidateName.trim()
+              : (sub.applicantName || 'Pemohon Layanan');
+
+            // Resolusi nomor HP / WhatsApp aktif
+            const isCandidateValid = (val?: string) => {
+              if (!val) return false;
+              const s = val.trim();
+              if (s === '-' || isTimestampOrDateString(s)) return false;
+              if (!/\d/.test(s)) return false;
+              if (resolvedName && s.toLowerCase() === resolvedName.toLowerCase()) return false;
+              return true;
+            };
+
+            let resolvedPhone = isCandidateValid(sub.phone) ? sub.phone : '';
+            if (!resolvedPhone) {
+              const candidates = [
+                sub.formData?.phone,
+                sub.formData?.['No WhatsApp Aktif'],
+                sub.formData?.['No. WhatsApp / HP'],
+                sub.formData?.['No WhatsApp'],
+                sub.formData?.['No HP / WhatsApp Petugas KUA'],
+                sub.formData?.whatsapp,
+                sub.formData?.noHp
+              ];
+              const found = candidates.find(isCandidateValid);
+              resolvedPhone = found || '-';
+            }
+
+            return (
+              <div
+                key={sub.id || Math.random().toString()}
+                className="p-4 bg-white hover:bg-slate-50 transition-colors space-y-3"
+              >
+                {/* Header Kartu: ID Tiket & Status */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono font-bold text-xs text-emerald-900 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                      #{sub.id || '-'}
+                    </span>
+                    {slaInfo && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${slaInfo.badgeClass}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${slaInfo.dotClass}`} />
+                        <span>{slaInfo.label}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Status Pill */}
+                  <div>
+                    {sub.status === 'APPROVED' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        Disetujui
+                      </span>
+                    )}
+                    {sub.status === 'COMPLETED' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                        Dokumen Terbit
+                      </span>
+                    )}
+                    {sub.status === 'VERIFYING' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        Verifikasi
+                      </span>
+                    )}
+                    {sub.status === 'REVIEW' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                        Telaah
+                      </span>
+                    )}
+                    {sub.status === 'SUBMITTED' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-50 text-cyan-800 border border-cyan-200">
+                        Baru
+                      </span>
+                    )}
+                    {sub.status === 'REVISION_NEEDED' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                        Perlu Revisi
+                      </span>
+                    )}
+                    {sub.status === 'REJECTED' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                        Ditolak
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Judul Layanan & Info Waktu */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                    {sub.serviceTitle || 'Layanan Bimas Islam'}
+                  </h4>
+                  <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 flex-wrap">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      <span>{sub.submittedAt ? formatIndoDate(sub.submittedAt) : '-'}</span>
+                    </span>
+                    {autoKua && autoKua !== '-' && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-900 border border-emerald-200 font-bold text-[10px]">
+                        <Building className="w-2.5 h-2.5 text-emerald-700" />
+                        <span>KUA {autoKua}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pemohon & Kontak */}
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                      <User className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                      <span className="truncate max-w-[170px]">{resolvedName}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11px] text-slate-600">
+                        {maskSensitivePhone(resolvedPhone)}
+                      </span>
+                      {resolvedPhone && resolvedPhone !== '-' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const msg = generateStatusUpdateWAMessage(sub, sub.status, undefined);
+                            openWhatsAppChat(resolvedPhone, msg);
+                          }}
+                          className="p-1 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition-colors cursor-pointer"
+                          title="Chat WhatsApp Pemohon"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 fill-current text-emerald-700" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status Berkas Fisik / Upload */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                    <span className="text-slate-500">Berkas Upload:</span>
+                    {filesCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/70 hover:bg-emerald-200 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                      >
+                        <FileText className="w-3 h-3 text-emerald-700" />
+                        <span>{filesCount} File Terunggah</span>
+                      </button>
+                    ) : (
+                      <span className="text-slate-400 font-medium">0 File Terunggah</span>
+                    )}
+                  </div>
+
+                  {sub.epaiGrade && (
+                    <div className="pt-1 border-t border-slate-200/60 text-[11px] flex items-center justify-between">
+                      <span className="text-slate-500">Nilai EPAI:</span>
+                      <span className="font-bold text-emerald-800 bg-emerald-100/60 px-1.5 py-0.5 rounded">
+                        {sub.epaiGrade}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tombol Aksi Ramah Sentuhan (HP Optimized) */}
+                <div className="grid grid-cols-4 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
+                    className="col-span-2 py-2 px-3 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                  >
+                    <FolderDown className="w-3.5 h-3.5" />
+                    <span>Periksa Berkas</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenReceipt(sub)}
+                    className="py-2 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center justify-center gap-1 transition-colors active:scale-95 cursor-pointer"
+                    title="Cetak Tanda Terima"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                    <span className="text-[11px]">Bukti</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSingleSubmission(sub.id, resolvedName)}
+                    className="py-2 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center justify-center gap-1 transition-colors active:scale-95 cursor-pointer"
+                    title="Hapus Permohonan"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="text-[11px]">Hapus</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {filteredList.length === 0 && (
