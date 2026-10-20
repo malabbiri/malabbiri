@@ -36,7 +36,9 @@ Permohonan layanan Anda telah berhasil terdaftar dalam sistem MALA'BIRI dengan r
 
 Status berkas saat ini: *MENUNGGU VERIFIKASI*
 
-Anda dapat memantau status perkembangan dokumen sewaktu-waktu melalui fitur *Lacak Dokumen* dengan memasukkan Nomor Tiket *${submission.id}*.
+Silakan cek malabbiri secara berkala:
+https://malabbiri.vercel.app/
+(Gunakan menu *Lacak Dokumen* dengan memasukkan Nomor Tiket *${submission.id}*)
 
 Petugas Seksi Bimas Islam Kemenag Gowa akan memverifikasi berkas Anda. Terima kasih telah menggunakan layanan digital MALA'BIRI.
 
@@ -76,9 +78,9 @@ export function generateStatusUpdateWAMessage(
   if (newStatus === 'APPROVED') {
     actionAdvice = `\n✅ *Permohonan Disetujui!* Berkas Anda telah ditelaah dan dinyatakan *Disetujui* oleh Seksi Bimas Islam Kemenag Kab. Gowa. Tahapan selanjutnya adalah finalisasi dan penerbitan dokumen resmi.`;
   } else if (newStatus === 'COMPLETED') {
-    actionAdvice = `\n🎉 *Alhamdulillah!* Dokumen/Rekomendasi resmi Anda telah diterbitkan. Anda dapat mengunduh bukti digital melalui portal MALA'BIRI atau mengambil berkas fisik di Kantor Kemenag Kab. Gowa (Senin-Kamis 07.30-16.00 WITA, Jumat 07.30-16.30 WITA).`;
+    actionAdvice = `\n🎉 *Alhamdulillah!* Dokumen/Rekomendasi resmi Anda telah diterbitkan. Anda dapat mengunduh bukti digital melalui MALA'BIRI (https://malabbiri.vercel.app/) atau mengambil berkas fisik di Kantor Kemenag Kab. Gowa (Senin-Kamis 07.30-16.00 WITA, Jumat 07.30-16.30 WITA).`;
   } else if (newStatus === 'REVISION_NEEDED') {
-    actionAdvice = `\n⚠️ *Perhatian:* Terdapat berkas yang perlu perbaikan/dilengkapi sesuai catatan verifikator di atas.\n\n💡 *PENTING:* Anda *TIDAK PERLU* mendaftar permohonan baru! Nomor tiket Anda (*${submission.id}*) tetap berlaku. Silakan buka menu *Lacak Permohonan* pada portal MALA'BIRI, masukkan nomor tiket Anda, lalu unggah ulang berkas perbaikan langsung di formulir pelacakan untuk diverifikasi kembali oleh petugas.`;
+    actionAdvice = `\n⚠️ *Perhatian:* Terdapat berkas yang perlu perbaikan/dilengkapi sesuai catatan verifikator di atas.\n\n💡 *PENTING:* Anda *TIDAK PERLU* mendaftar permohonan baru! Nomor tiket Anda (*${submission.id}*) tetap berlaku. Silakan buka menu *Lacak Permohonan* pada MALA'BIRI (https://malabbiri.vercel.app/), masukkan nomor tiket Anda, lalu unggah ulang berkas perbaikan langsung di formulir pelacakan untuk diverifikasi kembali oleh petugas.`;
   } else if (newStatus === 'REVIEW') {
     actionAdvice = `\nBerkas Anda telah lolos verifikasi awal dan saat ini dalam tahap telaah pimpinan atau pengukuran lapangan.`;
   }
@@ -95,8 +97,8 @@ Pemberitahuan perubahan status permohonan layanan:
 📋 *Layanan:* ${submission.serviceTitle}
 📊 *Status Terkini:* *${statusLabels[newStatus]}*${gradeSection}${noteSection}${actionAdvice}
 
-Silakan cek portal MALA'BIRI secara berkala:
-https://s.id/gowa.kemenag.go.id
+Silakan cek malabbiri secara berkala:
+https://malabbiri.vercel.app/
 
 Kontak Seksi Bimas Islam Kemenag Gowa:
 WA: ${APP_INFO.phone}

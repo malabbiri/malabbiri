@@ -50,7 +50,8 @@ import {
   EyeOff,
   Flame,
   ShieldAlert,
-  Bell
+  Bell,
+  Copy
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { 
@@ -140,6 +141,23 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
   // Filter Sensitivitas SLA / Tingkat Urgensi Pelayanan
   const [slaFilter, setSlaFilter] = useState<'ALL' | 'URGENT' | 'FRESH'>('ALL');
+
+  // State untuk feedback salin ID Tiket di kartu
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Helper garis tepi kotak status kartu
+  const getStatusBorderClass = (status?: ApplicationStatus) => {
+    switch (status) {
+      case 'APPROVED': return 'border-l-4 border-l-emerald-600';
+      case 'COMPLETED': return 'border-l-4 border-l-teal-600';
+      case 'VERIFYING': return 'border-l-4 border-l-amber-500';
+      case 'REVIEW': return 'border-l-4 border-l-blue-500';
+      case 'SUBMITTED': return 'border-l-4 border-l-cyan-500';
+      case 'REVISION_NEEDED': return 'border-l-4 border-l-rose-500';
+      case 'REJECTED': return 'border-l-4 border-l-slate-400';
+      default: return 'border-l-4 border-l-emerald-600';
+    }
+  };
 
   // Helper untuk menghitung SLA dan status urgensi berkas masuk secara sensitif
   const getSlaUrgencyInfo = (submittedAt?: string, status?: ApplicationStatus) => {
@@ -1651,8 +1669,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </table>
         </div>
 
-        {/* Mobile View: Tampilan Kartu Responsif Khusus Layar HP / Smartphone */}
-        <div className="md:hidden divide-y divide-slate-200">
+        {/* Mobile View: Tampilan Kartu Berbentuk Kotak Terstruktur (Rectangle Boxes) Khusus Layar HP */}
+        <div className="md:hidden p-3 sm:p-4 bg-slate-100/70 space-y-3.5">
           {paginatedList.map((sub) => {
             const effectiveFiles = (Array.isArray(sub.files) ? sub.files : []).filter(isPureUploadedFile);
             const filesCount = effectiveFiles.length;
@@ -1696,16 +1714,37 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             return (
               <div
                 key={sub.id || Math.random().toString()}
-                className="p-4 bg-white hover:bg-slate-50 transition-colors space-y-3"
+                className={`bg-white rounded-2xl border border-slate-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-md transition-all p-3.5 sm:p-4 space-y-3 relative overflow-hidden ${getStatusBorderClass(sub.status)}`}
               >
-                {/* Header Kartu: ID Tiket & Status */}
-                <div className="flex items-center justify-between gap-2">
+                {/* 1. KOTAK ATAS: ID TIKET, SLA & STATUS */}
+                <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-mono font-bold text-xs text-emerald-900 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                      #{sub.id || '-'}
-                    </span>
+                    <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/90 px-2.5 py-1 rounded-lg shadow-2xs">
+                      <span className="font-mono font-black text-xs text-emerald-900 tracking-tight">
+                        #{sub.id || '-'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (sub.id) {
+                            navigator.clipboard.writeText(sub.id);
+                            setCopiedId(sub.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }
+                        }}
+                        className="p-0.5 text-slate-400 hover:text-emerald-700 transition-colors cursor-pointer"
+                        title="Salin Nomor Tiket"
+                      >
+                        {copiedId === sub.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600 font-bold" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+
                     {slaInfo && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${slaInfo.badgeClass}`}>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border ${slaInfo.badgeClass}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${slaInfo.dotClass}`} />
                         <span>{slaInfo.label}</span>
                       </span>
@@ -1713,74 +1752,86 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   </div>
 
                   {/* Status Pill */}
-                  <div>
+                  <div className="flex-shrink-0">
                     {sub.status === 'APPROVED' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
                         Disetujui
                       </span>
                     )}
                     {sub.status === 'COMPLETED' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-300 shadow-2xs">
                         Dokumen Terbit
                       </span>
                     )}
                     {sub.status === 'VERIFYING' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
                         Verifikasi
                       </span>
                     )}
                     {sub.status === 'REVIEW' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-300 shadow-2xs">
                         Telaah
                       </span>
                     )}
                     {sub.status === 'SUBMITTED' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-50 text-cyan-800 border border-cyan-200">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-cyan-50 text-cyan-900 border border-cyan-300 shadow-2xs">
                         Baru
                       </span>
                     )}
                     {sub.status === 'REVISION_NEEDED' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-900 border border-rose-300 shadow-2xs">
                         Perlu Revisi
                       </span>
                     )}
                     {sub.status === 'REJECTED' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs">
                         Ditolak
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Judul Layanan & Info Waktu */}
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                {/* 2. KOTAK INFORMASI LAYANAN & WAKTU */}
+                <div className="bg-slate-50/90 rounded-xl p-2.5 sm:p-3 border border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                    <span>Layanan Bimas Islam</span>
+                    {autoKua && autoKua !== '-' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100/80 text-emerald-950 font-bold border border-emerald-300/80 text-[10px]">
+                        <Building className="w-3 h-3 text-emerald-700" />
+                        <span>KUA {autoKua}</span>
+                      </span>
+                    )}
+                  </div>
+                  
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
                     {sub.serviceTitle || 'Layanan Bimas Islam'}
                   </h4>
-                  <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 flex-wrap">
-                    <span className="flex items-center gap-1 font-medium">
-                      <Calendar className="w-3 h-3 text-slate-400" />
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60 text-[11px] text-slate-500 flex-wrap">
+                    <span className="flex items-center gap-1 font-medium text-slate-600">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
                       <span>{sub.submittedAt ? formatIndoDate(sub.submittedAt) : '-'}</span>
                     </span>
-                    {autoKua && autoKua !== '-' && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-900 border border-emerald-200 font-bold text-[10px]">
-                        <Building className="w-2.5 h-2.5 text-emerald-700" />
-                        <span>KUA {autoKua}</span>
+                    {sub.district && (
+                      <span className="text-slate-400 font-normal">
+                        • Kec. {sub.district}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Pemohon & Kontak */}
-                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                      <User className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                      <span className="truncate max-w-[170px]">{resolvedName}</span>
+                {/* 3. KOTAK DATA PEMOHON & BERKAS UNGGAHAN */}
+                <div className="bg-emerald-50/30 rounded-xl p-2.5 sm:p-3 border border-emerald-100/90 space-y-2">
+                  <div className="flex items-center justify-between text-xs gap-2">
+                    <div className="flex items-center gap-2 font-bold text-slate-900 min-w-0">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center flex-shrink-0 border border-emerald-200">
+                        <User className="w-3.5 h-3.5 text-emerald-700" />
+                      </div>
+                      <span className="truncate">{resolvedName}</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[11px] text-slate-600">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="font-mono text-[11px] font-semibold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
                         {maskSensitivePhone(resolvedPhone)}
                       </span>
                       {resolvedPhone && resolvedPhone !== '-' && (
@@ -1790,58 +1841,58 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                             const msg = generateStatusUpdateWAMessage(sub, sub.status, undefined);
                             openWhatsAppChat(resolvedPhone, msg);
                           }}
-                          className="p-1 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition-colors cursor-pointer"
+                          className="p-1 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white transition-colors cursor-pointer shadow-2xs"
                           title="Chat WhatsApp Pemohon"
                         >
-                          <MessageCircle className="w-3.5 h-3.5 fill-current text-emerald-700" />
+                          <MessageCircle className="w-3.5 h-3.5 fill-current" />
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Status Berkas Fisik / Upload */}
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
-                    <span className="text-slate-500">Berkas Upload:</span>
+                  {/* Status Berkas Fisik / Upload Kotak */}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-emerald-100 text-[11px]">
+                    <span className="text-slate-600 font-medium">Berkas Unggahan:</span>
                     {filesCount > 0 ? (
                       <button
                         type="button"
                         onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/70 hover:bg-emerald-200 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-900 bg-white hover:bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-300 shadow-2xs transition-colors cursor-pointer"
                       >
-                        <FileText className="w-3 h-3 text-emerald-700" />
-                        <span>{filesCount} File Terunggah</span>
+                        <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>{filesCount} File Siap Diverifikasi</span>
                       </button>
                     ) : (
-                      <span className="text-slate-400 font-medium">0 File Terunggah</span>
+                      <span className="text-slate-400 font-medium text-[11px]">0 File Terunggah</span>
                     )}
                   </div>
 
                   {sub.epaiGrade && (
-                    <div className="pt-1 border-t border-slate-200/60 text-[11px] flex items-center justify-between">
-                      <span className="text-slate-500">Nilai EPAI:</span>
-                      <span className="font-bold text-emerald-800 bg-emerald-100/60 px-1.5 py-0.5 rounded">
+                    <div className="pt-1.5 border-t border-emerald-100 text-[11px] flex items-center justify-between">
+                      <span className="text-slate-600 font-medium">Nilai Laporan e-PAI:</span>
+                      <span className="font-bold text-emerald-950 bg-white px-2 py-0.5 rounded-md border border-emerald-300">
                         {sub.epaiGrade}
                       </span>
                     </div>
                   )}
                 </div>
 
-                {/* Tombol Aksi Ramah Sentuhan (HP Optimized) */}
-                <div className="grid grid-cols-4 gap-1.5 pt-1">
+                {/* 4. KOTAK TOMBOL AKSI PETUGAS (THUMB-FRIENDLY) */}
+                <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => openVerificationModal({ ...sub, files: effectiveFiles })}
-                    className="col-span-2 py-2 px-3 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                    className="col-span-2 py-2.5 px-3 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
                   >
-                    <FolderDown className="w-3.5 h-3.5" />
+                    <FolderDown className="w-4 h-4 text-emerald-200" />
                     <span>Periksa Berkas</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => onOpenReceipt(sub)}
-                    className="py-2 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center justify-center gap-1 transition-colors active:scale-95 cursor-pointer"
-                    title="Cetak Tanda Terima"
+                    className="py-2.5 px-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center justify-center gap-1 transition-colors active:scale-95 cursor-pointer shadow-2xs"
+                    title="Cetak Tanda Terima Resmi Kemenag"
                   >
                     <Printer className="w-3.5 h-3.5 text-slate-600" />
                     <span className="text-[11px]">Bukti</span>
@@ -1850,7 +1901,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                   <button
                     type="button"
                     onClick={() => handleDeleteSingleSubmission(sub.id, resolvedName)}
-                    className="py-2 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center justify-center gap-1 transition-colors active:scale-95 cursor-pointer"
+                    className="py-2.5 px-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center justify-center gap-1 transition-colors active:scale-95 cursor-pointer shadow-2xs"
                     title="Hapus Permohonan"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
