@@ -117,8 +117,8 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [filterHistoryMonth, setFilterHistoryMonth] = useState<string>('ALL');
   const [filterHistoryYear, setFilterHistoryYear] = useState<string>('ALL');
 
-  // Pengaturan Urutan Permohonan (Default: NEWEST - Terbaru Dahulu, misal 17 Oktober 2026 di baris paling atas)
-  const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST' | 'RAW'>('NEWEST');
+  // Pengaturan Urutan Permohonan (Default: NEWEST - Terbaru Dahulu di baris paling atas)
+  const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
 
   // Modal Informasi Mode Ringan & Arsitektur Sinkronisasi Multi-Perangkat
   const [isSyncArchitectureModalOpen, setIsSyncArchitectureModalOpen] = useState(false);
@@ -686,15 +686,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     return matchesSearch && matchesStatus && matchesService && matchesDistrict && matchesHistoryTime;
   });
 
-  // Urutkan data secara ketat: Default adalah 'NEWEST' (Terbaru di paling atas, permohonan 17 Oktober 2026 dst selalu di atas, bukan 7 Oktober)
+  // Urutkan data secara otomatis: Default adalah 'NEWEST' (Terbaru selalu di baris paling atas)
   const sortedFilteredList = [...filteredList].sort((a, b) => {
-    if (sortOrder === 'RAW') return 0;
     const timeA = parseDateSafe(a.submittedAt).getTime();
     const timeB = parseDateSafe(b.submittedAt).getTime();
     if (sortOrder === 'OLDEST') {
       return timeA - timeB;
     }
-    // Default 'NEWEST': Permohonan paling baru (misal 17 Oktober) selalu berada di urutan teratas
+    // Default 'NEWEST': Permohonan paling baru selalu berada di urutan teratas
     return timeB - timeA;
   });
 
@@ -1082,7 +1081,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
       {/* Filters Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${activeViewTab === 'HISTORY' ? 'lg:grid-cols-7' : 'lg:grid-cols-5'} gap-3`}>
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${activeViewTab === 'HISTORY' ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} gap-3`}>
           {/* Search */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1145,20 +1144,6 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             </select>
           </div>
 
-          {/* Pengurutan Waktu & Posisi Baris */}
-          <div>
-            <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-300 text-xs text-emerald-950 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
-              title="Urutan Tampilan Permohonan"
-            >
-              <option value="NEWEST">⏳ Terbaru Dahulu (17 Okt, dst)</option>
-              <option value="OLDEST">⌛ Terlama Dahulu</option>
-              <option value="RAW">📑 Sesuai Urutan Spreadsheet</option>
-            </select>
-          </div>
-
           {/* Khusus Tab Riwayat: Filter Bulan & Tahun */}
           {activeViewTab === 'HISTORY' && (
             <>
@@ -1217,9 +1202,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
                 >
                   <div className="flex items-center gap-1.5">
                     <span>Tanggal Masuk</span>
-                    {sortOrder === 'NEWEST' && <ArrowDown className="w-3.5 h-3.5 text-emerald-700 font-bold" />}
-                    {sortOrder === 'OLDEST' && <ArrowUp className="w-3.5 h-3.5 text-amber-700 font-bold" />}
-                    {sortOrder === 'RAW' && <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />}
+                    {sortOrder === 'NEWEST' ? (
+                      <ArrowDown className="w-3.5 h-3.5 text-emerald-700 font-bold" />
+                    ) : (
+                      <ArrowUp className="w-3.5 h-3.5 text-amber-700 font-bold" />
+                    )}
                   </div>
                 </th>
                 <th className="px-4 py-3.5 text-slate-700">Layanan</th>
