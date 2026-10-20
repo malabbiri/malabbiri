@@ -38,7 +38,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Smartphone,
+  Zap,
+  HelpCircle,
+  HardDrive
 } from 'lucide-react';
 import { SubmissionRecord, ApplicationStatus, EpaiGrade, GOWA_DISTRICTS, OfficerSession, UploadedFileInfo, OfficerAccount } from '../types';
 import { 
@@ -46,7 +53,8 @@ import {
   isCurrentMonthSubmission, 
   getCurrentMonthYear, 
   getSubmissionMonthYear, 
-  INDONESIAN_MONTHS 
+  INDONESIAN_MONTHS,
+  parseDateSafe 
 } from '../utils/date';
 import { 
   updateSubmissionStatus, 
@@ -108,13 +116,19 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   const [filterHistoryMonth, setFilterHistoryMonth] = useState<string>('ALL');
   const [filterHistoryYear, setFilterHistoryYear] = useState<string>('ALL');
 
+  // Pengaturan Urutan Permohonan (Default: NEWEST - Terbaru Dahulu, misal 17 Oktober 2026 di baris paling atas)
+  const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST' | 'RAW'>('NEWEST');
+
+  // Modal Informasi Mode Ringan & Arsitektur Sinkronisasi Multi-Perangkat
+  const [isSyncArchitectureModalOpen, setIsSyncArchitectureModalOpen] = useState(false);
+
   // Pengaturan Halaman Ringan (Pagination) agar aplikasi ultra-cepat dan tidak lag di HP, tablet, maupun PC
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, filterService, filterDistrict, activeViewTab, filterHistoryMonth, filterHistoryYear]);
+  }, [searchQuery, filterStatus, filterService, filterDistrict, activeViewTab, filterHistoryMonth, filterHistoryYear, sortOrder]);
 
   // Status sinkronisasi otomatis Google Drive & Google Sheets
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
@@ -157,11 +171,19 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
   // Fungsi sinkronisasi otomatis komprehensif: Menarik berkas & permohonan baru dari Google Drive & Google Sheets
   const autoSyncDriveAndSheetSubmissions = async (isManualClick: boolean = false) => {
     try {
+      // Optimasi Mode Ringan: Jika bukan klik manual, periksa apakah cache baru diperbarui (< 15 menit)
+      const lastSyncTs = Number(localStorage.getItem('malabbiri_last_sheet_sync_ts') || '0');
+      const isCacheRecent = Date.now() - lastSyncTs < 15 * 60 * 1000;
+      if (!isManualClick && isCacheRecent && safeSubmissions.length > 0) {
+        setLastAutoSyncTime(new Date(lastSyncTs).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        return;
+      }
+
       setIsAutoSyncing(true);
       let totalFetched = 0;
       let recordsToSync: SubmissionRecord[] = [];
 
-      // 1. Tarik langsung dari Google Sheets Kantor (Membaca 100% data 15 & 16 Oktober & semua permohonan baru tanpa bergantung versi webhook)
+      // 1. Tarik langsung dari Google Sheets Kantor (Membaca 100% data 17 Oktober & semua permohonan baru)
       let fetchedDirectTotalRows = getStoredDbTotalRows();
       try {
         const directRes = await fetchSubmissionsDirectFromGoogleSheet(OFFICE_SPREADSHEET_ID);
@@ -240,8 +262,9 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       if (recordsToSync.length > 0) {
         const syncRes = await importOrSyncSubmissions(recordsToSync);
         onRefreshSubmissions();
+        localStorage.setItem('malabbiri_last_sheet_sync_ts', Date.now().toString());
         if (isManualClick) {
-          setSyncStatusNotice(`Sinkronisasi sukses! Basis data Google Sheets (${fetchedDirectTotalRows} data) tersinkronisasi 100% dengan ${syncRes.total} permohonan resmi (Termasuk pengajuan 15 & 16 Oktober & seluruh berkas Drive).`);
+          setSyncStatusNotice(`Sinkronisasi sukses! Basis data Google Sheets (${fetchedDirectTotalRows} data) tersinkronisasi 100% dengan ${syncRes.total} permohonan resmi (Termasuk permohonan 17 Oktober & seluruh berkas Drive).`);
           setTimeout(() => setSyncStatusNotice(''), 7000);
         }
       }
@@ -659,18 +682,30 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     return matchesSearch && matchesStatus && matchesService && matchesDistrict && matchesHistoryTime;
   });
 
+  // Urutkan data secara ketat: Default adalah 'NEWEST' (Terbaru di paling atas, permohonan 17 Oktober 2026 dst selalu di atas, bukan 7 Oktober)
+  const sortedFilteredList = [...filteredList].sort((a, b) => {
+    if (sortOrder === 'RAW') return 0;
+    const timeA = parseDateSafe(a.submittedAt).getTime();
+    const timeB = parseDateSafe(b.submittedAt).getTime();
+    if (sortOrder === 'OLDEST') {
+      return timeA - timeB;
+    }
+    // Default 'NEWEST': Permohonan paling baru (misal 17 Oktober) selalu berada di urutan teratas
+    return timeB - timeA;
+  });
+
   const countPending = activePool.filter(s => s && (s.status === 'SUBMITTED' || s.status === 'VERIFYING')).length;
   const countApproved = activePool.filter(s => s && (s.status === 'APPROVED' || s.status === 'COMPLETED')).length;
   const countRevision = activePool.filter(s => s && s.status === 'REVISION_NEEDED').length;
 
   // Perhitungan Pagination Cepat & Ringan untuk semua perangkat
-  const totalItems = filteredList.length;
+  const totalItems = sortedFilteredList.length;
   const effectivePageSize = pageSize > 0 ? pageSize : totalItems;
   const totalPages = Math.max(1, Math.ceil(totalItems / (effectivePageSize || 1)));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const startIndex = (safeCurrentPage - 1) * effectivePageSize;
   const endIndex = Math.min(startIndex + effectivePageSize, totalItems);
-  const paginatedList = pageSize === 0 ? filteredList : filteredList.slice(startIndex, endIndex);
+  const paginatedList = pageSize === 0 ? sortedFilteredList : sortedFilteredList.slice(startIndex, endIndex);
 
   const exportToCSV = () => {
     const getStatusIndonesian = (st: string) => {
@@ -687,7 +722,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
     };
 
     const headers = ['No Tiket', 'Tanggal', 'Layanan', 'Nama Pemohon', 'KUA Kecamatan', 'No HP', 'Status', 'Penilaian e-PAI', 'Catatan Petugas'];
-    const rows = filteredList.map(s => {
+    const rows = sortedFilteredList.map(s => {
       const autoKua = resolveAutoKuaName(s.district, s.institutionName);
       const isBad = isLooksLikeServiceName(s.applicantName, s.serviceTitle) || !s.applicantName || s.applicantName === 'Pemohon Layanan';
       const cleanName = !isBad ? s.applicantName : (s.formData?.applicantName || '-');
@@ -835,6 +870,19 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
+            type="button"
+            onClick={() => setIsSyncArchitectureModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            title="Penjelasan efisiensi sistem, sinkronisasi otomatis antar-perangkat, dan solusi berkas upload berkapasitas besar"
+          >
+            <Zap className="w-4 h-4 text-indigo-600" />
+            <span>Mode Ringan & Solusi Berkas</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500 text-white shadow-xs">
+              Cloud Realtime
+            </span>
+          </button>
+
+          <button
             onClick={() => setIsSyncImportModalOpen(true)}
             className="px-3.5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             title="Tarik data pengajuan & berkas dari Google Drive"
@@ -875,10 +923,10 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             onClick={handleManualRefreshAll}
             disabled={isAutoSyncing}
             className="px-4 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer border border-emerald-600"
-            title="Tarik langsung permohonan baru dari Google Drive & Google Sheets (termasuk 15 & 16 Oktober)"
+            title="Tarik langsung permohonan baru dari Google Drive & Google Sheets (termasuk 17 Oktober & terkini)"
           >
             <Cloud className={`w-4 h-4 text-emerald-300 ${isAutoSyncing ? 'animate-bounce' : ''}`} />
-            <span>Tarik Permohonan 15 & 16 Okt / Terkini</span>
+            <span>Tarik Permohonan 17 Okt & Terkini</span>
           </button>
 
           <button
@@ -915,7 +963,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
               </span>
             </div>
             <p className="text-xs text-emerald-100/90 font-medium mt-1 leading-relaxed">
-              Tercatat <span className="font-bold text-white underline decoration-emerald-400">{dbTotalRows || 1169} baris data</span> di spreadsheet Google Sheets kantor • Memuat <span className="font-bold text-white underline decoration-emerald-400">{safeSubmissions.length} berkas permohonan resmi unik</span> terverifikasi (termasuk pengajuan 15 & 16 Oktober & lampiran berkas asli).
+              Tercatat <span className="font-bold text-white underline decoration-emerald-400">{dbTotalRows || 1169} baris data</span> di spreadsheet Google Sheets kantor • Memuat <span className="font-bold text-white underline decoration-emerald-400">{safeSubmissions.length} berkas permohonan resmi unik</span> terverifikasi (termasuk pengajuan 17 Oktober & lampiran berkas asli).
             </p>
           </div>
         </div>
@@ -925,13 +973,14 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             type="button"
             onClick={() => {
               setActiveViewTab('ALL');
-              setSearchQuery('2026-10-1');
+              setSortOrder('NEWEST');
+              setSearchQuery('');
             }}
             className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer flex items-center gap-1.5"
-            title="Tampilkan pengajuan tanggal 15 & 16 Oktober"
+            title="Tampilkan pengajuan terbaru dengan urutan paling baru di posisi teratas (17 Oktober, dst)"
           >
             <Calendar className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Permohonan 15-16 Okt ({safeSubmissions.filter(s => s && s.submittedAt && (s.submittedAt.includes('2026-10-15') || s.submittedAt.includes('2026-10-16'))).length})</span>
+            <span>Permohonan Terbaru (17 Okt, dst)</span>
           </button>
 
           <button
@@ -1071,7 +1120,7 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
       {/* Filters Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${activeViewTab === 'HISTORY' ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} gap-3`}>
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${activeViewTab === 'HISTORY' ? 'lg:grid-cols-7' : 'lg:grid-cols-5'} gap-3`}>
           {/* Search */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1134,6 +1183,20 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             </select>
           </div>
 
+          {/* Pengurutan Waktu & Posisi Baris */}
+          <div>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as any)}
+              className="w-full px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-300 text-xs text-emerald-950 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+              title="Urutan Tampilan Permohonan"
+            >
+              <option value="NEWEST">⏳ Terbaru Dahulu (17 Okt, dst)</option>
+              <option value="OLDEST">⌛ Terlama Dahulu</option>
+              <option value="RAW">📑 Sesuai Urutan Spreadsheet</option>
+            </select>
+          </div>
+
           {/* Khusus Tab Riwayat: Filter Bulan & Tahun */}
           {activeViewTab === 'HISTORY' && (
             <>
@@ -1185,7 +1248,18 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
             <thead className="bg-slate-100 text-[11px] uppercase font-bold text-slate-700 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3.5 text-slate-700">ID Tiket</th>
-                <th className="px-4 py-3.5 text-slate-700">Tanggal</th>
+                <th 
+                  className="px-4 py-3.5 text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors select-none group"
+                  onClick={() => setSortOrder(prev => prev === 'NEWEST' ? 'OLDEST' : 'NEWEST')}
+                  title="Klik untuk mengubah urutan tanggal: Terbaru vs Terlama"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Tanggal Masuk</span>
+                    {sortOrder === 'NEWEST' && <ArrowDown className="w-3.5 h-3.5 text-emerald-700 font-bold" />}
+                    {sortOrder === 'OLDEST' && <ArrowUp className="w-3.5 h-3.5 text-amber-700 font-bold" />}
+                    {sortOrder === 'RAW' && <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />}
+                  </div>
+                </th>
                 <th className="px-4 py-3.5 text-slate-700">Layanan</th>
                 <th className="px-4 py-3.5 text-slate-700">Pemohon & Kontak</th>
                 <th className="px-4 py-3.5 text-slate-700">KUA Kecamatan</th>
@@ -2349,6 +2423,134 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
       )}
 
 
+
+      {/* Modal Penjelasan & Solusi Mode Ringan, Berkas Besar, dan Sinkronisasi Antar-Perangkat */}
+      {isSyncArchitectureModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="p-5 bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white rounded-t-2xl flex items-center justify-between sticky top-0 z-10 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Panduan Mode Ringan & Sinkronisasi Data</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950">
+                      Aktif
+                    </span>
+                  </h3>
+                  <p className="text-xs text-emerald-200/90 font-medium">
+                    Solusi efisiensi data, kuota, dan berkas kapasitas besar multi-perangkat
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSyncArchitectureModalOpen(false)}
+                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Isi Panduan & Solusi */}
+            <div className="p-5 sm:p-6 space-y-5 text-slate-700 text-xs">
+              {/* Point 1: Pertanyaan Utama Pengguna */}
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-5 h-5 text-emerald-700 flex-shrink-0" />
+                  <h4 className="text-sm font-bold text-emerald-950">
+                    Apakah Petugas Selalu Harus Melakukan "Tarik Data" di Perangkat Lain?
+                  </h4>
+                </div>
+                <p className="text-xs text-emerald-900 leading-relaxed font-medium">
+                  <strong className="text-emerald-950 font-extrabold">Jawabannya: TIDAK PERLU.</strong> Aplikasi MALA'BIRI telah menggunakan teknologi <span className="underline font-bold">Real-time Cloud Database (Firebase Firestore)</span>. Begitu pemohon mendaftar di HP mereka atau petugas mengubah status permohonan, data akan <strong className="text-emerald-950">otomatis masuk dan terbarui secara instan di semua perangkat petugas</strong> (Laptop kantor, HP Android pribadi, iPad, PC KUA) tanpa perlu memencet tombol "Tarik Data" berulang kali.
+                </p>
+                <div className="pt-2 flex items-center gap-2 text-[11px] text-emerald-800 font-semibold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>Koneksi Real-time Aktif: Pemohon baru otomatis masuk dalam hitungan detik.</span>
+                </div>
+              </div>
+
+              {/* Point 2: Solusi Berkas Kapasitas Besar */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center gap-2">
+                  <HardDrive className="w-5 h-5 text-teal-700 flex-shrink-0" />
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Solusi Cerdas untuk Berkas Upload Berkapasitas Besar (PDF / Gambar)
+                  </h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="p-3 bg-white rounded-lg border border-slate-200">
+                    <span className="font-bold text-slate-900 block mb-1">1. Zero-RAM Streaming</span>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Berkas fisik berukuran puluhan MB langsung diarahkan ke Google Drive / Cloud Storage. Database lokal hanya menyimpan tautan URL aman (&lt; 1 KB). Memori HP petugas tidak terkuras.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white rounded-lg border border-slate-200">
+                    <span className="font-bold text-slate-900 block mb-1">2. Lazy Loading (On-Demand)</span>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Dokumen hanya diunduh ke browser saat petugas menekan tombol <em>"Lihat Dokumen"</em> atau <em>"Download"</em>. Membuka tabel 1.000+ data tetap ultra-cepat dan tanpa lag.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Point 3: Mengapa Tanggal 17 Oktober Kini Selalu di Paling Atas */}
+              <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-700 flex-shrink-0" />
+                  <h4 className="text-sm font-bold text-amber-950">
+                    Pengurutan Tanggal Otomatis (17 Oktober 2026 Selalu di Baris Teratas)
+                  </h4>
+                </div>
+                <p className="text-xs text-amber-900 leading-relaxed font-medium">
+                  Sebelumnya, susunan spreadsheet di Google Sheets memiliki baris tanggal 7 Oktober di baris bawah yang dapat tertukar posisinya. Kini sistem secara otomatis menerapkan pengurutan waktu terverifikasi (<code className="bg-amber-100 px-1 py-0.5 rounded text-[10px] font-mono">parseDateSafe</code>). <strong>Permohonan paling baru (seperti 17 Oktober, 16 Oktober, dst) dijamin 100% selalu tampil di posisi baris paling atas secara default</strong>. Petugas juga dapat mengubah urutan menjadi terlama atau sesuai urutan mentah spreadsheet kapan saja.
+                </p>
+              </div>
+
+              {/* Point 4: Caching Cerdas & Hemat Kuota */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="font-bold text-slate-900 text-xs block">Status Caching Cerdas Sistem:</span>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Spreadsheet kantor hanya diunduh ulang maksimal setiap 15 menit sekali untuk menghemat baterai & kuota internet petugas di ponsel.
+                  </p>
+                  <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                    Sinkronisasi Terakhir: {lastAutoSyncTime || 'Sesi ini'} • Total Data: {activePool.length} permohonan
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSyncArchitectureModalOpen(false);
+                    handleManualRefreshAll();
+                  }}
+                  disabled={isAutoSyncing}
+                  className="px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer flex-shrink-0 shadow-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isAutoSyncing ? 'animate-spin' : ''}`} />
+                  <span>Paksa Tarik Ulang Sekarang</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSyncArchitectureModalOpen(false)}
+                className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs transition-colors cursor-pointer"
+              >
+                Tutup Panduan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Notice */}
       {attachNotice && (

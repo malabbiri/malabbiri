@@ -92,14 +92,22 @@ export default function App() {
     // Initial fetch
     loadData();
 
-    // Sinkronisasi otomatis data permohonan dari Google Sheets & Drive kantor saat aplikasi dimuat
-    fetchSubmissionsDirectFromGoogleSheet(OFFICE_SPREADSHEET_ID).then((res) => {
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        importOrSyncSubmissions(res.data).then(() => {
-          loadData();
-        }).catch(() => {});
-      }
-    }).catch(() => {});
+    // Sinkronisasi data permohonan dari Google Sheets & Drive kantor secara cerdas & hemat kuota
+    // Jika data lokal sudah ada dan baru disinkronkan kurang dari 15 menit, lewati download berat agar HP/Laptop ringan
+    const lastSheetSync = Number(localStorage.getItem('malabbiri_last_sheet_sync_ts') || '0');
+    const isCacheStale = Date.now() - lastSheetSync > 15 * 60 * 1000;
+    const currentLocalCount = getStoredSubmissions().length;
+
+    if (isCacheStale || currentLocalCount === 0) {
+      fetchSubmissionsDirectFromGoogleSheet(OFFICE_SPREADSHEET_ID).then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          importOrSyncSubmissions(res.data).then(() => {
+            localStorage.setItem('malabbiri_last_sheet_sync_ts', Date.now().toString());
+            loadData();
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
 
     // Real-time Cloud Sync across HP, Laptop, and PC
     const unsubscribeSubmissions = subscribeToSubmissions((latestSubmissions) => {

@@ -13,6 +13,7 @@ import { SubmissionRecord, SurveyRecord, ApplicationStatus, UploadedFileInfo } f
 import { INITIAL_SUBMISSIONS, INITIAL_SURVEYS } from '../data/initialData';
 import { generateFileKey, storeFileInDb } from './indexedDbStorage';
 import { resolveAutoKuaName, cleanAndTidyNotes } from './notesHelper';
+import { parseDateSafe } from './date';
 
 const SUBMISSIONS_KEY = 'malabbiri_submissions_v3';
 const SURVEYS_KEY = 'malabbiri_surveys_v3';
@@ -659,8 +660,8 @@ export function initFirestoreSync() {
 
         const combinedList = [...localUnsynced, ...mergedList];
 
-        // Sort descending by submission time
-        combinedList.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        // Sort descending by submission time (terbaru di atas)
+        combinedList.sort((a, b) => parseDateSafe(b.submittedAt).getTime() - parseDateSafe(a.submittedAt).getTime());
 
         cachedSubmissions = combinedList;
         try {
@@ -1132,7 +1133,7 @@ export async function importOrSyncSubmissions(
   }
 
   const resultList = Array.from(currentMap.values());
-  resultList.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  resultList.sort((a, b) => parseDateSafe(b.submittedAt).getTime() - parseDateSafe(a.submittedAt).getTime());
 
   cachedSubmissions = resultList;
   saveSubmissions(resultList);
