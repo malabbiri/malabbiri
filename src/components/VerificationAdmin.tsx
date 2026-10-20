@@ -37,6 +37,7 @@ import {
   Link2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   ArrowDown,
@@ -121,6 +122,9 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
 
   // Modal Informasi Mode Ringan & Arsitektur Sinkronisasi Multi-Perangkat
   const [isSyncArchitectureModalOpen, setIsSyncArchitectureModalOpen] = useState(false);
+
+  // Dropdown menu alat lanjutan (impor arsip drive, scan, dll)
+  const [isMoreToolsOpen, setIsMoreToolsOpen] = useState(false);
 
   // Pengaturan Halaman Ringan (Pagination) agar aplikasi ultra-cepat dan tidak lag di HP, tablet, maupun PC
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -795,20 +799,11 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           )}
 
           <button
-            onClick={() => setIsSyncImportModalOpen(true)}
-            className="px-3.5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
-            title="Tarik data pengajuan & berkas dari Google Drive atau Google Sheets ke Panel Verifikasi"
-          >
-            <Cloud className="w-4 h-4 text-emerald-200" />
-            <span>Tarik / Impor Data Drive</span>
-          </button>
-
-          <button
             onClick={() => setIsGoogleDriveModalOpen(true)}
-            className="px-3.5 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
-            title="Pengaturan Webhook Google Drive & Google Sheets Kantor (100% Gratis Selamanya)"
+            className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            title="Pengaturan Integrasi Webhook Google Drive & Google Sheets Kantor"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
             <span>Integrasi Drive & Sheets</span>
             {isGasConfigured ? (
               <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" title="Terhubung"></span>
@@ -818,30 +813,20 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </button>
 
           <button
-            onClick={handleSyncAllToGoogleSheet}
-            disabled={isSyncingSheet || submissions.length === 0}
-            className="px-3.5 py-2 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
-            title="Kirim dan Perbarui Seluruh Data Permohonan ke Google Sheets Kantor"
-          >
-            <FileSpreadsheet className={`w-4 h-4 text-teal-700 ${isSyncingSheet ? 'animate-spin' : ''}`} />
-            <span>{isSyncingSheet ? 'Merekam ke Sheet...' : 'Sinkron ke Sheets'}</span>
-          </button>
-
-          <button
             onClick={handleOpenManageOfficers}
-            className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
+            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             title="Kelola Daftar Akun Petugas & Verifikator Resmi"
           >
-            <Users className="w-4 h-4 text-slate-600" />
+            <Users className="w-3.5 h-3.5 text-slate-600" />
             <span>Kelola Akun Petugas</span>
           </button>
 
           <button
             onClick={onLogout}
-            className="px-3.5 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
+            className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             title="Keluar dan Kunci Dashboard Petugas"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
             <span>Kunci & Logout</span>
           </button>
         </div>
@@ -868,74 +853,114 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Mode Ringan & Info */}
           <button
             type="button"
             onClick={() => setIsSyncArchitectureModalOpen(true)}
             className="px-3.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-            title="Penjelasan efisiensi sistem, sinkronisasi otomatis antar-perangkat, dan solusi berkas upload berkapasitas besar"
+            title="Panduan Mode Ringan, Berkas Besar & Sinkronisasi Real-time"
           >
-            <Zap className="w-4 h-4 text-indigo-600" />
-            <span>Mode Ringan & Solusi Berkas</span>
+            <Zap className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Mode Ringan</span>
             <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500 text-white shadow-xs">
               Cloud Realtime
             </span>
           </button>
 
-          <button
-            onClick={() => setIsSyncImportModalOpen(true)}
-            className="px-3.5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-            title="Tarik data pengajuan & berkas dari Google Drive"
-          >
-            <Cloud className="w-4 h-4 text-emerald-300" />
-            <span>Tarik Data Drive</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleQuickScanAllDriveFiles}
-            disabled={isScanningDrive}
-            className="px-3.5 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-            title="Pindai dan pulihkan seluruh berkas Google Drive yang belum muncul di tabel verifikasi"
-          >
-            <RefreshCw className={`w-4 h-4 text-teal-200 ${isScanningDrive ? 'animate-spin' : ''}`} />
-            <span>{isScanningDrive ? 'Memindai Drive...' : 'Pindai Berkas Drive'}</span>
-          </button>
-
-          <button
-            onClick={handlePurgeAllSubmissions}
-            className="px-3 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Kosongkan seluruh data permohonan"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Kosongkan Data</span>
-          </button>
-
+          {/* Export CSV */}
           <button
             onClick={exportToCSV}
-            className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-2 border border-slate-200 shadow-xs transition-colors cursor-pointer"
+            className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 border border-slate-200 shadow-xs transition-colors cursor-pointer"
+            title="Unduh rekapitulasi data layanan ke format CSV/Excel"
           >
-            <Download className="w-4 h-4 text-slate-600" />
+            <Download className="w-3.5 h-3.5 text-slate-600" />
             <span>Export CSV</span>
           </button>
 
+          {/* Alat Lanjutan Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsMoreToolsOpen(!isMoreToolsOpen)}
+              className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 border border-slate-200 shadow-xs transition-colors cursor-pointer"
+              title="Opsi alat arsip lanjutan"
+            >
+              <span>Alat Lanjutan</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isMoreToolsOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isMoreToolsOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-20"
+                  onClick={() => setIsMoreToolsOpen(false)}
+                />
+                <div className="absolute right-0 mt-1.5 w-60 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in zoom-in-95 text-xs text-slate-700 divide-y divide-slate-100">
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreToolsOpen(false);
+                        setIsSyncImportModalOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2.5 font-medium transition-colors"
+                    >
+                      <Cloud className="w-4 h-4 text-emerald-600" />
+                      <span>Tarik / Impor Arsip Drive</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreToolsOpen(false);
+                        handleQuickScanAllDriveFiles();
+                      }}
+                      disabled={isScanningDrive}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2.5 font-medium transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 text-teal-600 ${isScanningDrive ? 'animate-spin' : ''}`} />
+                      <span>{isScanningDrive ? 'Memindai Drive...' : 'Pindai Berkas Drive'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreToolsOpen(false);
+                        handleSyncAllToGoogleSheet();
+                      }}
+                      disabled={isSyncingSheet || submissions.length === 0}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2.5 font-medium transition-colors disabled:opacity-50"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-teal-600" />
+                      <span>Rekam ke Sheet Kantor</span>
+                    </button>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreToolsOpen(false);
+                        handlePurgeAllSubmissions();
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-rose-50 text-rose-700 flex items-center gap-2.5 font-medium transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-500" />
+                      <span>Kosongkan Data Lokal</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Tombol Utama: Segarkan Data */}
           <button
             onClick={handleManualRefreshAll}
             disabled={isAutoSyncing}
-            className="px-4 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer border border-emerald-600"
-            title="Tarik langsung permohonan baru dari Google Drive & Google Sheets (termasuk 17 Oktober & terkini)"
+            className="px-4 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            title="Segarkan data dan sinkronkan dengan Google Drive/Sheets & Cloud Firestore"
           >
-            <Cloud className={`w-4 h-4 text-emerald-300 ${isAutoSyncing ? 'animate-bounce' : ''}`} />
-            <span>Tarik Permohonan 17 Okt & Terkini</span>
-          </button>
-
-          <button
-            onClick={handleManualRefreshAll}
-            className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
-            title="Segarkan data dan sinkronkan dengan Google Drive/Sheets"
-          >
-            <RefreshCw className={`w-4 h-4 ${isAutoSyncing ? 'animate-spin' : ''}`} />
-            <span>Segarkan Data</span>
+            <RefreshCw className={`w-4 h-4 text-emerald-300 ${isAutoSyncing ? 'animate-spin' : ''}`} />
+            <span>{isAutoSyncing ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
           </button>
         </div>
       </div>
@@ -968,30 +993,9 @@ export const VerificationAdmin: React.FC<VerificationAdminProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-center flex-wrap flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveViewTab('ALL');
-              setSortOrder('NEWEST');
-              setSearchQuery('');
-            }}
-            className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-colors cursor-pointer flex items-center gap-1.5"
-            title="Tampilkan pengajuan terbaru dengan urutan paling baru di posisi teratas (17 Oktober, dst)"
-          >
-            <Calendar className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Permohonan Terbaru (17 Okt, dst)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleManualRefreshAll}
-            disabled={isAutoSyncing}
-            className="px-4 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-emerald-950 text-xs font-extrabold transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isAutoSyncing ? 'animate-spin' : ''}`} />
-            <span>{isAutoSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
-          </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-center text-xs text-emerald-100 font-medium bg-emerald-950/40 px-3.5 py-2 rounded-lg border border-emerald-700/60 flex-shrink-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>Real-time Cloud Aktif {lastAutoSyncTime ? `• Sinkron: ${lastAutoSyncTime}` : ''}</span>
         </div>
       </div>
 
